@@ -166,6 +166,17 @@ export default function App() {
         nextLaserCrit: false
       };
       gameStateRef.current = room;
+      setIsCleared(false);
+      setFinalScore(0);
+      setUiState({
+        stage: room.stage,
+        stageTimer: room.stageTimer,
+        isSelectingSkill: room.isSelectingSkill,
+        isSelectingForm: room.isSelectingForm,
+        skillChoices: room.skillChoices,
+        formChoices: room.formChoices,
+        players: JSON.parse(JSON.stringify(room.players))
+      });
       setCurrentRoom(roomInput.trim());
     }
   };
