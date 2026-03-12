@@ -201,7 +201,7 @@ export default function App() {
       if (!room) return;
 
       tick++;
-      const now = Date.now();
+      const now = renderNow;
       const currentMap = MAPS[Math.min(room.stage - 1, MAPS.length - 1)];
 
       // Update UI
@@ -2953,6 +2953,7 @@ export default function App() {
         if (b.angle !== undefined) {
           ctx.rotate(b.angle);
         } else {
+
           ctx.rotate(Math.atan2(b.vy, b.vx));
         }
 
