@@ -2,6 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AttackForm, Upgrade, SpecificUpgrade, GeneralUpgrade, Player, Enemy, Bullet, MAPS, Room, createRoom, EnemyType, ATTACK_FORM_NAMES, ATTACK_FORM_DESCS, UPGRADE_NAMES, UPGRADE_DESCS } from './gameLogic';
 import { MainMenu } from './components/MainMenu';
 import { GameOver, GameClear, FormSelection, UpgradeSelection, SumSkillOverlay, GridMenu, GridToolOverlay } from './components/UI';
+import { attachInputHandlers } from './modules/inputHandlers';
+import { applyGridAction, applySelectedForm, applySelectedUpgrade } from './modules/combatHandlers';
+import { clampGridMenuPosToViewport } from './modules/renderUtils';
 
 const TOTAL_STAGES = 15;
 
@@ -127,15 +130,9 @@ export default function App() {
   const selectionEndRef = useRef<{x: number, y: number} | null>(null);
 
   const clampGridMenuPos = (x: number, y: number) => {
-    const menuW = 220;
-    const menuH = 170;
-    const margin = 8;
     const maxW = containerRef.current?.clientWidth || window.innerWidth;
     const maxH = containerRef.current?.clientHeight || window.innerHeight;
-    return {
-      x: Math.max(margin, Math.min(maxW - menuW - margin, x)),
-      y: Math.max(margin, Math.min(maxH - menuH - margin, y))
-    };
+    return clampGridMenuPosToViewport(x, y, maxW, maxH);
   };
 
   const joinRoom = () => {
@@ -174,97 +171,20 @@ export default function App() {
   };
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'w' || e.key === 'W') keys.current.w = true;
-      if (e.key === 'a' || e.key === 'A') keys.current.a = true;
-      if (e.key === 's' || e.key === 'S') keys.current.s = true;
-      if (e.key === 'd' || e.key === 'D') keys.current.d = true;
-      if (e.key === ' ') {
-        const gs = gameStateRef.current;
-        if (gs && gs.players[myId]) {
-          const p = gs.players[myId];
-          if (p.gridToolCharges && p.gridToolCharges > 0 && gs.bulletTime <= 0) {
-            p.gridToolCharges--;
-            gs.bulletTime = 300;
-          }
-        }
-      }
-    };
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'w' || e.key === 'W') keys.current.w = false;
-      if (e.key === 'a' || e.key === 'A') keys.current.a = false;
-      if (e.key === 's' || e.key === 'S') keys.current.s = false;
-      if (e.key === 'd' || e.key === 'D') keys.current.d = false;
-    };
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      mouse.current.x = e.clientX - rect.left;
-      mouse.current.y = e.clientY - rect.top;
-      
-      if (isSelectingGridRef.current && selectionStartRef.current) {
-        selectionEndRef.current = { x: mouse.current.x, y: mouse.current.y };
-      }
-    };
-
-    const handleMouseDown = (e: MouseEvent) => { 
-      if (e.button !== 0) return;
-      mouse.current.isDown = true; 
-      
-      if (showGridMenu) {
-        // If clicking outside the menu, close it
-        const menuEl = document.getElementById('grid-menu');
-        if (menuEl && !menuEl.contains(e.target as Node)) {
-          setShowGridMenu(false);
-          if (gameStateRef.current) gameStateRef.current.bulletTime = 0;
-        }
-        return;
-      }
-
-      const gs = gameStateRef.current;
-      if (gs && gs.bulletTime > 0 && !showGridMenu) {
-        isSelectingGridRef.current = true;
-        selectionStartRef.current = { x: mouse.current.x, y: mouse.current.y };
-        selectionEndRef.current = { x: mouse.current.x, y: mouse.current.y };
-      }
-    };
-    
-    const handleMouseUp = (e: MouseEvent) => { 
-      if (e.button !== 0) return;
-      mouse.current.isDown = false; 
-      
-      if (isSelectingGridRef.current) {
-        isSelectingGridRef.current = false;
-        if (selectionStartRef.current && selectionEndRef.current) {
-          const dx = Math.abs(selectionEndRef.current.x - selectionStartRef.current.x);
-          const dy = Math.abs(selectionEndRef.current.y - selectionStartRef.current.y);
-          if (dx > 10 && dy > 10) {
-            setShowGridMenu(true);
-            const pos = clampGridMenuPos(mouse.current.x, mouse.current.y);
-            setGridMenuPos(pos);
-          } else {
-            selectionStartRef.current = null;
-            selectionEndRef.current = null;
-          }
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mousedown', handleMouseDown);
-    window.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mousedown', handleMouseDown);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
+    return attachInputHandlers({
+      keys,
+      mouse,
+      gameStateRef,
+      containerRef,
+      selectionStartRef,
+      selectionEndRef,
+      isSelectingGridRef,
+      showGridMenu,
+      setShowGridMenu,
+      setGridMenuPos,
+      clampGridMenuPos,
+      myId
+    });
   }, [showGridMenu]);
 
   // Game Loop
@@ -274,7 +194,7 @@ export default function App() {
     let tick = 0;
     let lastUiUpdate = 0;
     let lastIsSelecting = false;
-    let lastIsSelectingForm = true;
+    let lastIsSelectingForm = false;
 
     const gameLoop = () => {
       const room = gameStateRef.current;
@@ -554,7 +474,6 @@ export default function App() {
         let speedMultiplier = 1;
         
         if (p.attackForm === 'wordart') {
-          
           speedMultiplier *= p.specificUpgrades.includes('wordart_all_caps') ? 0.9 : 0.7; // -10% or -30% speed //保留
           if (p.specificUpgrades.includes('wordart_shield')) {
             speedMultiplier *= 0.85; // Additional -10% (relative to base, but multiplying is fine, or subtract)
@@ -905,9 +824,7 @@ export default function App() {
               commentKnockbackMult *= 2;
             }
 
-
             explosionRadius = Math.min(explosionRadius, 220); //保留
-
             fireRate *= fireRateMult;
             bulletSpeed *= bulletSpeedMult;
 
@@ -1546,7 +1463,6 @@ export default function App() {
                   room.enemies.push({
                     id: room.enemyIdCounter++, x: sx, y: sy, hp: 8, maxHp: 8, type: 'MINION',
                     vx: 0, vy: 0, knockbackX: 0, knockbackY: 0, text: 'ERR', width: 28, height: 28, speed: 3.4, weight: 1,
-
                     state: 'idle', stateTimer: 0, lastAttack: 0
                   });
                 }
@@ -2212,7 +2128,6 @@ export default function App() {
         } else if ((!b.isBulldozer && checkObstacleCollision(b.x, b.y, b.size, b.size)) || 
             b.x < -100 || b.x > currentMap.width + 100 || b.y < -100 || b.y > currentMap.height + 100) {
           if (b.type === 'comment' && ownerSpecific.includes('comment_wallbounce') && !b.wallBounced) { //保留
-
             const outX = b.x < 0 || b.x > currentMap.width;
             const outY = b.y < 0 || b.y > currentMap.height;
             if (outX) b.vx *= -1;
@@ -2489,132 +2404,41 @@ export default function App() {
 
   const handleGridAction = (type: 'area' | 'row' | 'col') => {
     if (!selectionStartRef.current || !selectionEndRef.current || !gameStateRef.current) return;
-    
-    const room = gameStateRef.current;
-    const me = room.players[myId];
-    if (!me) return;
-    
     const canvas = canvasRef.current;
     if (!canvas) return;
-    
-    const SCALE = 0.8; //保留
-    const cameraX = me.x - canvas.width / (2 * SCALE);
-    const cameraY = me.y - canvas.height / (2 * SCALE);
-    
-    const worldStartX = selectionStartRef.current.x / SCALE + cameraX;
-    const worldStartY = selectionStartRef.current.y / SCALE + cameraY;
-    const worldEndX = selectionEndRef.current.x / SCALE + cameraX;
-    const worldEndY = selectionEndRef.current.y / SCALE + cameraY;
-    
-    const x = Math.min(worldStartX, worldEndX);
-    const y = Math.min(worldStartY, worldEndY);
-    const w = Math.abs(worldEndX - worldStartX);
-    const h = Math.abs(worldEndY - worldStartY);
-    
-    room.bulletTime = 0;
-    let hitCount = 0;
-    room.enemies.forEach(e => {
-      let hit = false;
-      if (type === 'area') {
-        if (e.x > x && e.x < x + w && e.y > y && e.y < y + h) hit = true;
-      } else if (type === 'row') {
-        if (e.y > y && e.y < y + h) hit = true;
-      } else if (type === 'col') {
-        if (e.x > x && e.x < x + w) hit = true;
-      }
 
-      if (hit) {
-        if (e.type === 'EliteBoss') {
-          e.hp -= Math.min(e.hp, e.maxHp / 3);
-        } else {
-          e.hp -= 99999;
-        }
-        hitCount++;
-      }
+    applyGridAction(type, {
+      room: gameStateRef.current,
+      myId,
+      canvas,
+      selectionStart: selectionStartRef.current,
+      selectionEnd: selectionEndRef.current,
+      setShowGridMenu,
+      isSelectingGridRef,
+      selectionStartRef,
+      selectionEndRef,
+      shake
     });
-    
-    if (hitCount > 0) {
-      shake.current = 30;
-    }
-    
-    setShowGridMenu(false);
-    isSelectingGridRef.current = false;
-    selectionStartRef.current = null;
-    selectionEndRef.current = null;
   };
 
   const handleSelectUpgrade = (upgrade: Upgrade) => {
     const room = gameStateRef.current;
     if (!room) return;
-    
-    const p = room.players[myId];
-    if (p) {
-      if (['bold', 'underline', 'highlight', 'rand', 'vlookup', 'sum', 'italic', 'strikethrough', 'ctrl_c', 'ctrl_z', 'format_painter'].includes(upgrade)) {
-        if (upgrade === 'format_painter' && p.attackForm === 'sparkline') {
-          room.skillChoices = room.skillChoices.filter(u => u !== upgrade);
-          return;
-        }
-        if (!p.generalUpgrades.includes(upgrade as GeneralUpgrade)) {
-          p.generalUpgrades.push(upgrade as GeneralUpgrade);
-        }
-      } else {
-        if (!p.specificUpgrades.includes(upgrade as SpecificUpgrade)) {
-          p.specificUpgrades.push(upgrade as SpecificUpgrade);
-        }
-      }
-      
-      p.upgradesToChoose = (p.upgradesToChoose || 1) - 1;
-      room.skillChoices = room.skillChoices.filter(u => u !== upgrade);
-      
-      if (p.upgradesToChoose > 0 && room.skillChoices.length > 0) {
-        setUiState(prev => prev ? { ...prev, skillChoices: room.skillChoices } : null);
-        return;
-      }
-    }
-    
-    p.readyForNextStage = true;
 
-    room.isSelectingSkill = false;
-    room.stage++;
-    room.stageTimer = 0;
-
-    if (room.stage > TOTAL_STAGES) {
-      const score = (p.kills || 0) * 10 + TOTAL_STAGES * 200 - (p.deaths || 0) * 100;
-      setFinalScore(Math.max(0, score));
-      setIsCleared(true);
-      setUiState(prev => prev ? { ...prev, isSelectingSkill: false } : null);
-      return;
-    }
-    
-    if (room.stage <= MAPS.length) {
-      room.enemies = []; 
-      room.bullets = [];
-      room.puddles = [];
-      room.enemyBullets = [];
-      room.aoeWarnings = [];
-      room.lasers = [];
-      room.items = [];
-      room.dynamicObstacles = [];
-      
-      const currentMap = MAPS[Math.min(room.stage - 1, MAPS.length - 1)];
-      p.x = currentMap.playerSpawn.x;
-      p.y = currentMap.playerSpawn.y;
-    }
-    p.readyForNextStage = false;
-    setUiState(prev => prev ? { ...prev, isSelectingSkill: false } : null);
+    applySelectedUpgrade(upgrade, {
+      room,
+      myId,
+      totalStages: TOTAL_STAGES,
+      setFinalScore,
+      setIsCleared,
+      setUiState
+    });
   };
 
   const handleSelectForm = (form: AttackForm) => {
     const room = gameStateRef.current;
     if (!room) return;
-    
-    const p = room.players[myId];
-    if (p) {
-      p.attackForm = form;
-    }
-    
-    room.isSelectingForm = false;
-    setUiState(prev => prev ? { ...prev, isSelectingForm: false } : null);
+    applySelectedForm(room, myId, form, setUiState);
   };
 
   // Canvas Render Loop
@@ -2905,7 +2729,6 @@ export default function App() {
         };
         const seq = hostileTokens[eb.type] || ['ERR'];
         const token = seq[Math.floor((renderNow / 40 + eb.id) % seq.length)];
-
         const alpha = Math.max(0.35, eb.life / 300);
 
         ctx.fillStyle = `rgba(255, 70, 70, ${alpha})`;
@@ -2913,7 +2736,6 @@ export default function App() {
 
         for (let lane = -1; lane <= 1; lane++) {
           const yJitter = Math.sin(renderNow * 0.02 + eb.id + lane) * 2;
-
           ctx.fillText(token, 0, lane * 10 + yJitter);
         }
 
@@ -2990,7 +2812,6 @@ export default function App() {
             const r = Math.max(90, e.width * 0.28 - layer * 10);
             const chars = 80 + layer * 20;
             ctx.fillStyle = `hsla(${(renderNow / 8 + layer * 40) % 360}, 95%, ${45 + layer * 3}%, ${0.18 + layer * 0.05})`;
-
             ctx.font = `bold ${10 + layer}px monospace`;
             for (let i = 0; i < chars; i++) {
               const a = (i / chars) * Math.PI * 2 + phase * (0.6 + layer * 0.08);
@@ -3048,7 +2869,6 @@ export default function App() {
 
         if (e.type === 'VLOOKUP' && e.state === 'aiming' && e.dashTargetX !== undefined && e.dashTargetY !== undefined) {
           ctx.beginPath();
-
           ctx.moveTo(e.x, e.y);
           ctx.lineTo(e.dashTargetX, e.dashTargetY);
           ctx.strokeStyle = `rgba(255, 50, 50, ${Math.max(0.2, 1 - (e.stateTimer || 0)/120)})`;
@@ -3178,14 +2998,12 @@ export default function App() {
             ctx.beginPath();
             ctx.moveTo(-b.size * 3.2, 0);
             ctx.lineTo(b.size * 3.2, 0);
-
             ctx.strokeStyle = '#ff4b4b';
             ctx.lineWidth = 3;
             ctx.stroke();
           }
         } else if (b.type === 'sparkline') {
           const token = ['=>', '::', '01', '{}'][Math.floor((renderNow / 60 + b.id) % 4)];
-
           ctx.fillStyle = 'rgba(70,180,255,0.9)';
           ctx.font = `bold ${Math.max(12, b.size * 0.9)}px monospace`;
           for (let k = -2; k <= 2; k++) {
@@ -3215,7 +3033,6 @@ export default function App() {
           ctx.fillStyle = 'rgba(255,230,180,0.95)';
           ctx.fillText('/*BOMB*/', 0, 0);
 
-
           if (b.isStrikethrough) {
             ctx.beginPath();
             ctx.moveTo(-b.size/2, 0);
@@ -3233,7 +3050,6 @@ export default function App() {
           ctx.shadowBlur = 6;
           const chars = ['0', '1', 'x', 'n', '{', '}', '[', ']', '='];
           const char = chars[Math.floor((renderNow / 50 + b.id) % chars.length)];
-
           ctx.fillText(char, 0, 0);
           ctx.shadowBlur = 0;
 
@@ -3322,7 +3138,6 @@ export default function App() {
             for (let i = 0; i < charCount; i++) {
               const dist = i * 9 + flow;
               const seed = Math.floor(renderNow / 50) + i;
-
               const char = sparklineChars[seed % sparklineChars.length];
               const yOffset = Math.sin(i * 0.35 + renderNow * 0.015) * 2;
               
@@ -3337,7 +3152,6 @@ export default function App() {
             for (let i = 0; i < charCount; i++) {
               const dist = i * 4 + flow;
               const seed = Math.floor(renderNow / 50) + i;
-
               const char = sparklineChars[seed % sparklineChars.length];
               const yOffset = Math.sin(i * 0.42 + renderNow * 0.02) * 1.2;
               const fade = 1 - (dist / visibleLaserRange);
