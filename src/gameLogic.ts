@@ -8,7 +8,11 @@ export type SpecificUpgrade =
   | 'wordart_wide' | 'wordart_fast_push' | 'wordart_shield' | 'wordart_stun' | 'wordart_quad' | 'wordart_pile_driver' | 'wordart_column_freeze'
   | 'array_plus_2' | 'array_rapid' | 'array_bounce' | 'array_pierce' | 'array_big' | 'array_spreadsheet'
   | 'sparkline_freeze' | 'sparkline_cannon' | 'sparkline_reflect' | 'sparkline_overclock' | 'sparkline_burn_stack' | 'sparkline_overload'
-  | 'comment_triple' | 'comment_knockback' | 'comment_split' | 'comment_black' | 'comment_super' | 'comment_gravity_well';
+  | 'comment_triple' | 'comment_knockback' | 'comment_split' | 'comment_black' | 'comment_super' | 'comment_gravity_well'
+  | 'wordart_all_caps' | 'wordart_hotkey' | 'wordart_typewriter' | 'wordart_revision' | 'wordart_subscript'
+  | 'sparkline_burn' | 'sparkline_killshot' | 'sparkline_execute' | 'sparkline_tenshot' | 'sparkline_charge'
+  | 'comment_density' | 'comment_mark' | 'comment_wallbounce' | 'comment_proximity' | 'comment_battery'
+  | 'array_ricochet' | 'array_converge' | 'array_single' | 'array_orbit' | 'array_scatter';
 
 export type GeneralUpgrade = 'bold' | 'underline' | 'highlight' | 'rand' | 'vlookup' | 'sum' | 'italic' | 'strikethrough' | 'ctrl_c' | 'ctrl_z' | 'format_painter';
 
@@ -68,6 +72,26 @@ export const UPGRADE_NAMES: Record<Upgrade, string> = {
   comment_split: '分裂炸弹',
   comment_black: '炸黑了',
   comment_super: '超级炸弹',
+  wordart_all_caps: '全大写',
+  wordart_hotkey: '快捷键',
+  wordart_typewriter: '打字机',
+  wordart_revision: '修订标记',
+  wordart_subscript: '下标',
+  sparkline_burn: '灼烧叠层',
+  sparkline_killshot: '击杀闪光',
+  sparkline_execute: '立即执行',
+  sparkline_tenshot: '十连',
+  sparkline_charge: '充能发射',
+  comment_density: '密度加成',
+  comment_mark: '未解决批注',
+  comment_wallbounce: '墙面反弹',
+  comment_proximity: '近爆引信',
+  comment_battery: '电池批注',
+  array_ricochet: '连续引用',
+  array_converge: '汇聚公式',
+  array_single: '单元格模式',
+  array_orbit: '轨道防御',
+  array_scatter: '扩散填充',
   bold: '加粗 (Bold)',
   italic: '斜体 (Italic)',
   underline: '下划线 (Underline)',
@@ -121,6 +145,26 @@ export const UPGRADE_DESCS: Record<Upgrade, string> = {
   comment_split: '【分裂炸弹】碰到敌人后分裂成3颗炸弹',
   comment_black: '【炸黑了】爆炸后把地面炸黑(视觉效果)',
   comment_super: '【超级炸弹】每30秒扔出巨大炸弹，秒杀普通/精英怪，并附加减速和灼烧',
+  wordart_all_caps: 'WordArt形态移速惩罚从-30%降为-10%',
+  wordart_hotkey: '压墙击杀后，下一发忽略冷却立即可发',
+  wordart_typewriter: '子弹从30%体积飞行中线性增长至200%，碰撞体积同步变化',
+  wordart_revision: '大字命中精英/Boss时施加"修订"标记5秒，标记期间该目标受所有伤害来源+35%',
+  wordart_subscript: '每次发射同时在玩家下方60px发射40%大小副弹（伤害40%，相同穿透），不消耗CD',
+  sparkline_burn: '激光持续命中同一目标叠灼烧（每秒+1层，最多8层，每层+5伤/秒），离开后每3秒-1层',
+  sparkline_killshot: '激光击杀敌人后300ms内，下一束激光伤害×3（触发即消耗）',
+  sparkline_execute: '激光对HP低于25%的非Boss敌人造成3倍伤害',
+  sparkline_tenshot: '每连续命中10次后，下次命中触发确定3倍暴击（非随机，触发即重置计数）',
+  sparkline_charge: '不射击时每秒积累1格充能（最多3格），射击时消耗全部，激光伤害×(1+格数×0.7)',
+  comment_density: '爆炸范围内每多1个敌人，所有命中者额外+15%伤害（最多+75%）',
+  comment_mark: '爆炸后范围内存活的敌人被标记4秒，受下次爆炸+80%伤害（消耗标记）',
+  comment_wallbounce: '炸弹碰到边界或障碍物时反弹一次继续飞行，不提前爆炸（限1次）',
+  comment_proximity: '炸弹飞行中任意敌人进入40px范围内立即触发爆炸',
+  comment_battery: '每次爆炸命中至少1个敌人，立即回复玩家2%最大HP',
+  array_ricochet: '每次击杀敌人：本次飞行速度+20%、穿透+1（各上限累计+3）',
+  array_converge: '所有子弹飞出300px后向发射中心线收拢，远处集中打同一目标',
+  array_single: '强制只发射1颗子弹，伤害=当前所有子弹总和×0.8，速度×1.5',
+  array_orbit: '玩家周围持续绕行8颗微型子弹，触碰敌人造成5伤害并推开',
+  array_scatter: '子弹命中敌人时，在命中点生成2颗随机方向弹片（伤害30%，无穿透）',
   bold: '直接伤害 +30%，击退 +6px',
   italic: '飞行速度 +15%，射速 +10%',
   underline: '攻击留下1.4秒拖尾/残痕，伤害7/s',
@@ -170,6 +214,12 @@ export interface Player {
   ctrlZUsed?: boolean;
   gridToolCharges?: number;
   upgradesToChoose?: number;
+  laserCharge?: number;
+  lastChargeTime?: number;
+  lasersHit?: number;
+  nextLaserCrit?: boolean;
+  killshotUntil?: number;
+  orbitAngle?: number;
 }
 
 export interface AoeWarning {
@@ -210,6 +260,10 @@ export interface Enemy {
   isBuffed?: boolean;
   crushCooldown?: number;
   crushCount?: number;
+  burnStacks?: number;
+  annotateMark?: number;
+  commentMark?: number;
+  revisionMark?: number;
 }
 
 export interface EnemyBullet {
@@ -272,6 +326,15 @@ export interface Bullet {
   isShield?: boolean;
   stunChance?: number;
   isSuper?: boolean;
+  typewriterScale?: number;
+  initialAngle?: number;
+  travelDist?: number;
+  ricochetSpeed?: number;
+  ricochetPierce?: number;
+  isOrbit?: boolean;
+  initialWidth?: number;
+  initialHeight?: number;
+  wallBounced?: boolean;
 }
 
 export interface Laser {
@@ -390,7 +453,133 @@ export const MAPS: MapDef[] = [
       { x: 300, y: 2700 }, { x: 1500, y: 2700 }, { x: 2700, y: 2700 }
     ],
     playerSpawn: { x: 1500, y: 1500 }
+  },
+  {
+    width: 3000, height: 3000,
+    obstacles: [
+      { x: 500, y: 900, w: 2000, h: 120 },
+      { x: 500, y: 1980, w: 2000, h: 120 },
+      { x: 1450, y: 1020, w: 100, h: 960 }
+    ],
+    bushes: [{ x: 1380, y: 1400, w: 240, h: 200 }],
+    spawners: [{ x: 250, y: 250 }, { x: 2750, y: 250 }, { x: 250, y: 2750 }, { x: 2750, y: 2750 }],
+    playerSpawn: { x: 1500, y: 1500 }
+  },
+  {
+    width: 3000, height: 3000,
+    obstacles: [
+      { x: 700, y: 700, w: 200, h: 1600 },
+      { x: 2100, y: 700, w: 200, h: 1600 },
+      { x: 900, y: 700, w: 1200, h: 200 },
+      { x: 900, y: 2100, w: 1200, h: 200 }
+    ],
+    bushes: [{ x: 1300, y: 1300, w: 400, h: 400 }],
+    spawners: [{ x: 1500, y: 250 }, { x: 1500, y: 2750 }, { x: 300, y: 1500 }, { x: 2700, y: 1500 }],
+    playerSpawn: { x: 1500, y: 1500 }
+  },
+  {
+    width: 3000, height: 3000,
+    obstacles: [
+      { x: 450, y: 450, w: 450, h: 450 }, { x: 2100, y: 450, w: 450, h: 450 },
+      { x: 450, y: 2100, w: 450, h: 450 }, { x: 2100, y: 2100, w: 450, h: 450 },
+      { x: 1200, y: 1200, w: 600, h: 600 }
+    ],
+    bushes: [],
+    spawners: [{ x: 1500, y: 200 }, { x: 1500, y: 2800 }, { x: 200, y: 1500 }, { x: 2800, y: 1500 }],
+    playerSpawn: { x: 1500, y: 980 }
+  },
+  {
+    width: 3000, height: 3000,
+    obstacles: [
+      { x: 0, y: 1300, w: 1200, h: 120 },
+      { x: 1800, y: 1300, w: 1200, h: 120 },
+      { x: 0, y: 1580, w: 1200, h: 120 },
+      { x: 1800, y: 1580, w: 1200, h: 120 },
+      { x: 1380, y: 600, w: 240, h: 1800 }
+    ],
+    bushes: [{ x: 1280, y: 1360, w: 440, h: 280 }],
+    spawners: [{ x: 200, y: 200 }, { x: 2800, y: 200 }, { x: 200, y: 2800 }, { x: 2800, y: 2800 }],
+    playerSpawn: { x: 1500, y: 1500 }
+  },
+  {
+    width: 3000, height: 3000,
+    obstacles: [
+      { x: 600, y: 600, w: 1800, h: 120 },
+      { x: 600, y: 2280, w: 1800, h: 120 },
+      { x: 600, y: 720, w: 120, h: 1560 },
+      { x: 2280, y: 720, w: 120, h: 1560 },
+      { x: 1200, y: 1200, w: 600, h: 600 }
+    ],
+    bushes: [],
+    spawners: [{ x: 300, y: 1500 }, { x: 2700, y: 1500 }, { x: 1500, y: 300 }, { x: 1500, y: 2700 }],
+    playerSpawn: { x: 1500, y: 900 }
+  },
+  {
+    width: 3000, height: 3000,
+    obstacles: [
+      { x: 900, y: 0, w: 140, h: 1300 },
+      { x: 900, y: 1700, w: 140, h: 1300 },
+      { x: 1960, y: 0, w: 140, h: 1300 },
+      { x: 1960, y: 1700, w: 140, h: 1300 },
+      { x: 1200, y: 1380, w: 600, h: 240 }
+    ],
+    bushes: [{ x: 1220, y: 1400, w: 560, h: 200 }],
+    spawners: [{ x: 200, y: 300 }, { x: 2800, y: 300 }, { x: 200, y: 2700 }, { x: 2800, y: 2700 }],
+    playerSpawn: { x: 1500, y: 1500 }
+  },
+  {
+    width: 3000, height: 3000,
+    obstacles: [
+      { x: 400, y: 400, w: 500, h: 220 },
+      { x: 2100, y: 400, w: 500, h: 220 },
+      { x: 400, y: 2380, w: 500, h: 220 },
+      { x: 2100, y: 2380, w: 500, h: 220 },
+      { x: 1200, y: 850, w: 600, h: 1300 }
+    ],
+    bushes: [],
+    spawners: [{ x: 1500, y: 150 }, { x: 1500, y: 2850 }, { x: 150, y: 1500 }, { x: 2850, y: 1500 }],
+    playerSpawn: { x: 950, y: 1500 }
+  },
+  {
+    width: 3000, height: 3000,
+    obstacles: [
+      { x: 0, y: 0, w: 3000, h: 100 },
+      { x: 0, y: 2900, w: 3000, h: 100 },
+      { x: 0, y: 0, w: 100, h: 3000 },
+      { x: 2900, y: 0, w: 100, h: 3000 },
+      { x: 700, y: 700, w: 1600, h: 80 },
+      { x: 700, y: 2220, w: 1600, h: 80 }
+    ],
+    bushes: [{ x: 1300, y: 1250, w: 400, h: 500 }],
+    spawners: [{ x: 300, y: 300 }, { x: 2700, y: 300 }, { x: 300, y: 2700 }, { x: 2700, y: 2700 }],
+    playerSpawn: { x: 1500, y: 1500 }
+  },
+  {
+    width: 3000, height: 3000,
+    obstacles: [
+      { x: 500, y: 500, w: 2000, h: 180 },
+      { x: 500, y: 2320, w: 2000, h: 180 },
+      { x: 500, y: 680, w: 180, h: 1640 },
+      { x: 2320, y: 680, w: 180, h: 1640 },
+      { x: 1300, y: 1200, w: 400, h: 600 }
+    ],
+    bushes: [],
+    spawners: [{ x: 1500, y: 250 }, { x: 1500, y: 2750 }, { x: 250, y: 1500 }, { x: 2750, y: 1500 }],
+    playerSpawn: { x: 900, y: 900 }
+  },
+  {
+    width: 3000, height: 3000,
+    obstacles: [
+      { x: 800, y: 800, w: 500, h: 500 },
+      { x: 1700, y: 800, w: 500, h: 500 },
+      { x: 800, y: 1700, w: 500, h: 500 },
+      { x: 1700, y: 1700, w: 500, h: 500 }
+    ],
+    bushes: [{ x: 1400, y: 1400, w: 200, h: 200 }],
+    spawners: [{ x: 200, y: 200 }, { x: 2800, y: 200 }, { x: 200, y: 2800 }, { x: 2800, y: 2800 }, { x: 1500, y: 200 }, { x: 1500, y: 2800 }],
+    playerSpawn: { x: 1500, y: 1500 }
   }
+
 ];
 
 export interface Room {

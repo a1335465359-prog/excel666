@@ -17,6 +17,23 @@ export const GameOver: React.FC<{ stageTimer: number; onRestart: () => void }> =
   </div>
 );
 
+export const GameClear: React.FC<{ score: number; kills: number; deaths: number; onRestart: () => void }> = ({ score, kills, deaths, onRestart }) => (
+  <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-50">
+    <div className="bg-white p-8 border border-[#c8c6c4] shadow-xl flex flex-col items-center max-w-md w-full">
+      <div className="text-4xl mb-4">🏆</div>
+      <h2 className="text-2xl font-bold text-[#107c41] mb-2">恭喜通关！</h2>
+      <p className="text-gray-700 mb-1">总分：<span className="font-bold">{score}</span></p>
+      <p className="text-gray-600 mb-6 text-center">击杀: {kills} / 死亡: {deaths}</p>
+      <button
+        className="px-6 py-2 bg-[#217346] text-white font-bold hover:bg-[#1e603b] transition-colors"
+        onClick={onRestart}
+      >
+        再来一局
+      </button>
+    </div>
+  </div>
+);
+
 export const FormSelection: React.FC<{
   formChoices: AttackForm[];
   onSelect: (form: AttackForm) => void;
