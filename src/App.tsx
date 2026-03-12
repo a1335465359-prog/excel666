@@ -554,6 +554,7 @@ export default function App() {
         let speedMultiplier = 1;
         
         if (p.attackForm === 'wordart') {
+          
           speedMultiplier *= p.specificUpgrades.includes('wordart_all_caps') ? 0.9 : 0.7; // -10% or -30% speed //保留
           if (p.specificUpgrades.includes('wordart_shield')) {
             speedMultiplier *= 0.85; // Additional -10% (relative to base, but multiplying is fine, or subtract)
@@ -904,7 +905,9 @@ export default function App() {
               commentKnockbackMult *= 2;
             }
 
+
             explosionRadius = Math.min(explosionRadius, 220); //保留
+
             fireRate *= fireRateMult;
             bulletSpeed *= bulletSpeedMult;
 
@@ -1543,6 +1546,7 @@ export default function App() {
                   room.enemies.push({
                     id: room.enemyIdCounter++, x: sx, y: sy, hp: 8, maxHp: 8, type: 'MINION',
                     vx: 0, vy: 0, knockbackX: 0, knockbackY: 0, text: 'ERR', width: 28, height: 28, speed: 3.4, weight: 1,
+
                     state: 'idle', stateTimer: 0, lastAttack: 0
                   });
                 }
@@ -2208,6 +2212,7 @@ export default function App() {
         } else if ((!b.isBulldozer && checkObstacleCollision(b.x, b.y, b.size, b.size)) || 
             b.x < -100 || b.x > currentMap.width + 100 || b.y < -100 || b.y > currentMap.height + 100) {
           if (b.type === 'comment' && ownerSpecific.includes('comment_wallbounce') && !b.wallBounced) { //保留
+
             const outX = b.x < 0 || b.x > currentMap.width;
             const outY = b.y < 0 || b.y > currentMap.height;
             if (outX) b.vx *= -1;
@@ -2900,6 +2905,7 @@ export default function App() {
         };
         const seq = hostileTokens[eb.type] || ['ERR'];
         const token = seq[Math.floor((renderNow / 40 + eb.id) % seq.length)];
+
         const alpha = Math.max(0.35, eb.life / 300);
 
         ctx.fillStyle = `rgba(255, 70, 70, ${alpha})`;
@@ -2907,6 +2913,7 @@ export default function App() {
 
         for (let lane = -1; lane <= 1; lane++) {
           const yJitter = Math.sin(renderNow * 0.02 + eb.id + lane) * 2;
+
           ctx.fillText(token, 0, lane * 10 + yJitter);
         }
 
@@ -2983,6 +2990,7 @@ export default function App() {
             const r = Math.max(90, e.width * 0.28 - layer * 10);
             const chars = 80 + layer * 20;
             ctx.fillStyle = `hsla(${(renderNow / 8 + layer * 40) % 360}, 95%, ${45 + layer * 3}%, ${0.18 + layer * 0.05})`;
+
             ctx.font = `bold ${10 + layer}px monospace`;
             for (let i = 0; i < chars; i++) {
               const a = (i / chars) * Math.PI * 2 + phase * (0.6 + layer * 0.08);
@@ -3040,6 +3048,7 @@ export default function App() {
 
         if (e.type === 'VLOOKUP' && e.state === 'aiming' && e.dashTargetX !== undefined && e.dashTargetY !== undefined) {
           ctx.beginPath();
+
           ctx.moveTo(e.x, e.y);
           ctx.lineTo(e.dashTargetX, e.dashTargetY);
           ctx.strokeStyle = `rgba(255, 50, 50, ${Math.max(0.2, 1 - (e.stateTimer || 0)/120)})`;
@@ -3124,6 +3133,7 @@ export default function App() {
         if (b.angle !== undefined) {
           ctx.rotate(b.angle);
         } else {
+
           ctx.rotate(Math.atan2(b.vy, b.vx));
         }
 
@@ -3168,12 +3178,14 @@ export default function App() {
             ctx.beginPath();
             ctx.moveTo(-b.size * 3.2, 0);
             ctx.lineTo(b.size * 3.2, 0);
+
             ctx.strokeStyle = '#ff4b4b';
             ctx.lineWidth = 3;
             ctx.stroke();
           }
         } else if (b.type === 'sparkline') {
           const token = ['=>', '::', '01', '{}'][Math.floor((renderNow / 60 + b.id) % 4)];
+
           ctx.fillStyle = 'rgba(70,180,255,0.9)';
           ctx.font = `bold ${Math.max(12, b.size * 0.9)}px monospace`;
           for (let k = -2; k <= 2; k++) {
@@ -3203,6 +3215,7 @@ export default function App() {
           ctx.fillStyle = 'rgba(255,230,180,0.95)';
           ctx.fillText('/*BOMB*/', 0, 0);
 
+
           if (b.isStrikethrough) {
             ctx.beginPath();
             ctx.moveTo(-b.size/2, 0);
@@ -3220,6 +3233,7 @@ export default function App() {
           ctx.shadowBlur = 6;
           const chars = ['0', '1', 'x', 'n', '{', '}', '[', ']', '='];
           const char = chars[Math.floor((renderNow / 50 + b.id) % chars.length)];
+
           ctx.fillText(char, 0, 0);
           ctx.shadowBlur = 0;
 
@@ -3308,6 +3322,7 @@ export default function App() {
             for (let i = 0; i < charCount; i++) {
               const dist = i * 9 + flow;
               const seed = Math.floor(renderNow / 50) + i;
+
               const char = sparklineChars[seed % sparklineChars.length];
               const yOffset = Math.sin(i * 0.35 + renderNow * 0.015) * 2;
               
@@ -3322,6 +3337,7 @@ export default function App() {
             for (let i = 0; i < charCount; i++) {
               const dist = i * 4 + flow;
               const seed = Math.floor(renderNow / 50) + i;
+
               const char = sparklineChars[seed % sparklineChars.length];
               const yOffset = Math.sin(i * 0.42 + renderNow * 0.02) * 1.2;
               const fade = 1 - (dist / visibleLaserRange);
