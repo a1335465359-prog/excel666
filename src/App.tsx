@@ -281,7 +281,7 @@ export default function App() {
       if (!room) return;
 
       tick++;
-      const now = Date.now();
+      const now = renderNow;
       const currentMap = MAPS[Math.min(room.stage - 1, MAPS.length - 1)];
 
       // Update UI
@@ -343,7 +343,7 @@ export default function App() {
           room.dynamicObstacles = [];
           return;
         }
-        room.players[myId].upgradesToChoose = room.stage <= 4 ? 2 : 1;
+        room.players[myId].upgradesToChoose = (room.stage === 4 || room.stage === 8) ? 2 : 1; //保留
         room.isSelectingSkill = true;
         return;
       }
@@ -554,7 +554,8 @@ export default function App() {
         let speedMultiplier = 1;
         
         if (p.attackForm === 'wordart') {
-          speedMultiplier *= p.specificUpgrades.includes('wordart_all_caps') ? 0.9 : 0.7; // -10% or -30% speed
+          
+          speedMultiplier *= p.specificUpgrades.includes('wordart_all_caps') ? 0.9 : 0.7; // -10% or -30% speed //保留
           if (p.specificUpgrades.includes('wordart_shield')) {
             speedMultiplier *= 0.85; // Additional -10% (relative to base, but multiplying is fine, or subtract)
           }
@@ -848,13 +849,14 @@ export default function App() {
               }
 
               const createLaser = (angleOffset: number, dmgMult: number, extraWidth: number) => {
+                const laserWidthMult = general.includes('bold') ? 1.8 : 1;
                 room.lasers.push({
                   id: room.bulletIdCounter++,
                   owner: p.id,
                   x: p.x, y: p.y,
                   angle: p.angle + angleOffset,
                   damage: finalDamage * dmgMult,
-                  width: width + extraWidth,
+                  width: (width + extraWidth) * laserWidthMult,
                   range: range,
                   life: 15,
                   maxLife: 15,
@@ -884,12 +886,12 @@ export default function App() {
             fireRate = 600;
             damage = 50;
             bulletSpeed = 11.5; // 230px/s approx
-            let explosionRadius = 100;
+            let explosionRadius = 110;
             let count = 1;
 
             if (specific.includes('comment_size')) {
-              explosionRadius *= 1.3;
-              damageMult *= 1.2;
+              explosionRadius *= 1.5;
+              damageMult *= 1.25;
             }
             if (specific.includes('comment_fast')) {
               fireRate *= 0.7;
@@ -903,7 +905,9 @@ export default function App() {
               commentKnockbackMult *= 2;
             }
 
-            explosionRadius = Math.min(explosionRadius, 160);
+
+            explosionRadius = Math.min(explosionRadius, 220); //保留
+
             fireRate *= fireRateMult;
             bulletSpeed *= bulletSpeedMult;
 
@@ -915,7 +919,7 @@ export default function App() {
               if (specific.includes('comment_ult') && p.commentCounter % 4 === 0) {
                 isUlt = true;
                 damage = 90;
-                explosionRadius = 160;
+                explosionRadius = 220;
               }
 
               let finalDamage = damage * damageMult;
@@ -1122,7 +1126,7 @@ export default function App() {
               x: p.x, y: p.y,
               angle: p.angle,
               damage: 9999, // High damage
-              width: 150, // Very wide
+              width: p.generalUpgrades.includes('bold') ? 220 : 150, // Very wide
               range: 5000,
               life: 30, // 0.5s duration
               maxLife: 30,
@@ -1204,6 +1208,13 @@ export default function App() {
 
       for (let i = room.enemies.length - 1; i >= 0; i--) {
         const e = room.enemies[i];
+
+        if (e.type === 'SplitCell') {
+          e.stateTimer = (e.stateTimer || 0) - timeSpeed;
+          if ((e.stateTimer || 0) <= 0) {
+            e.hp = 0;
+          }
+        }
         
         if (e.state === 'stunned') {
           e.stateTimer = (e.stateTimer || 0) - timeSpeed;
@@ -1534,7 +1545,8 @@ export default function App() {
                   const sy = e.y + Math.sin(ba) * 40;
                   room.enemies.push({
                     id: room.enemyIdCounter++, x: sx, y: sy, hp: 8, maxHp: 8, type: 'MINION',
-                    vx: 0, vy: 0, knockbackX: 0, knockbackY: 0, text: '💣', width: 28, height: 28, speed: 3.4, weight: 1,
+                    vx: 0, vy: 0, knockbackX: 0, knockbackY: 0, text: 'ERR', width: 28, height: 28, speed: 3.4, weight: 1,
+
                     state: 'idle', stateTimer: 0, lastAttack: 0
                   });
                 }
@@ -1631,7 +1643,7 @@ export default function App() {
                 y: e.y + Math.sin(angle) * 20,
                 hp: 15 * room.stage, maxHp: 15 * room.stage, type: 'SplitCell', text: '单元格', width: 30, height: 20, speed: 2.5,
                 vx: 0, vy: 0, knockbackX: Math.cos(angle) * 10, knockbackY: Math.sin(angle) * 10,
-                state: 'idle', stateTimer: 0, lastAttack: 0,
+                state: 'idle', stateTimer: 600, lastAttack: 0,
                 weight: 1
               });
             }
@@ -1842,7 +1854,7 @@ export default function App() {
             
             if (b.isSuper || b.leavesResidue) { // comment_black or underline
               room.puddles.push({
-                id: room.puddleIdCounter++, x: b.x, y: b.y, radius: (b.explosionRadius || 70) * 0.8, type: 'burn_slow', life: 300, maxLife: 300, damage: b.damage * 0.1, owner: b.owner
+                id: room.puddleIdCounter++, x: b.x, y: b.y, radius: (b.explosionRadius || 70) * 1.15, type: 'burn_slow', life: 360, maxLife: 360, damage: b.damage * 0.14, owner: b.owner //保留
               });
               room.puddles.push({
                 id: room.puddleIdCounter++, x: b.x, y: b.y, radius: (b.explosionRadius || 70) * 0.8, type: 'blacken', life: 600, maxLife: 600, damage: 0, owner: b.owner
@@ -1888,8 +1900,18 @@ export default function App() {
           if (!b.isBulldozer && b.hitTargets && b.hitTargets.has(e.id)) continue;
 
           let isHit = false;
-          if (b.type === 'wordart' && b.width && b.height) {
-            // WordArt is always horizontal now, so simple AABB collision
+          if (b.type === 'wordart' && b.width && b.height && b.angle !== undefined) { //保留
+            const dx = e.x - b.x;
+            const dy = e.y - b.y;
+            const cos = Math.cos(-b.angle);
+            const sin = Math.sin(-b.angle);
+            const rx = dx * cos - dy * sin;
+            const ry = dx * sin + dy * cos;
+
+            if (Math.abs(rx) < b.width/2 + e.width/2 && Math.abs(ry) < b.height/2 + e.height/2) {
+              isHit = true;
+            }
+          } else if (b.type === 'wordart' && b.width && b.height) {
             if (Math.abs(b.x - e.x) < b.width/2 + e.width/2 && Math.abs(b.y - e.y) < b.height/2 + e.height/2) {
               isHit = true;
             }
@@ -2189,7 +2211,8 @@ export default function App() {
           }
         } else if ((!b.isBulldozer && checkObstacleCollision(b.x, b.y, b.size, b.size)) || 
             b.x < -100 || b.x > currentMap.width + 100 || b.y < -100 || b.y > currentMap.height + 100) {
-          if (b.type === 'comment' && ownerSpecific.includes('comment_wallbounce') && !b.wallBounced) {
+          if (b.type === 'comment' && ownerSpecific.includes('comment_wallbounce') && !b.wallBounced) { //保留
+
             const outX = b.x < 0 || b.x > currentMap.width;
             const outY = b.y < 0 || b.y > currentMap.height;
             if (outX) b.vx *= -1;
@@ -2219,7 +2242,18 @@ export default function App() {
         let blocked = false;
         for (const b of room.bullets) {
           if (b.type === 'wordart' && b.isShield && b.width && b.height) {
-            if (Math.abs(eb.x - b.x) < (b.width/2 + eb.size) && Math.abs(eb.y - b.y) < (b.height/2 + eb.size)) {
+            if (b.angle !== undefined) { //保留
+              const dx = eb.x - b.x;
+              const dy = eb.y - b.y;
+              const cos = Math.cos(-b.angle);
+              const sin = Math.sin(-b.angle);
+              const rx = dx * cos - dy * sin;
+              const ry = dx * sin + dy * cos;
+              if (Math.abs(rx) < (b.width/2 + eb.size) && Math.abs(ry) < (b.height/2 + eb.size)) {
+                blocked = true;
+                break;
+              }
+            } else if (Math.abs(eb.x - b.x) < (b.width/2 + eb.size) && Math.abs(eb.y - b.y) < (b.height/2 + eb.size)) {
               blocked = true;
               break;
             }
@@ -2463,7 +2497,7 @@ export default function App() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     
-    const SCALE = 0.6;
+    const SCALE = 0.8; //保留
     const cameraX = me.x - canvas.width / (2 * SCALE);
     const cameraY = me.y - canvas.height / (2 * SCALE);
     
@@ -2490,7 +2524,11 @@ export default function App() {
       }
 
       if (hit) {
-        e.hp -= 99999;
+        if (e.type === 'EliteBoss') {
+          e.hp -= Math.min(e.hp, e.maxHp / 3);
+        } else {
+          e.hp -= 99999;
+        }
         hitCount++;
       }
     });
@@ -2591,6 +2629,7 @@ export default function App() {
 
     const render = () => {
       const gameState = gameStateRef.current;
+      const renderNow = Date.now();
       
       if (canvas.width !== container.clientWidth || canvas.height !== container.clientHeight) {
         canvas.width = container.clientWidth;
@@ -2603,7 +2642,7 @@ export default function App() {
       }
 
       const me = gameState.players[myId];
-      const SCALE = 0.6;
+      const SCALE = 0.8;
       
       let bgColor = '#ffffff';
       let gridColor = '#e1dfdd';
@@ -2772,30 +2811,36 @@ export default function App() {
           const progress = 1 - (p.life / p.maxLife);
           const alpha = p.life / p.maxLife;
           const explosionChars = ['#REF!', '#VALUE!', '#NULL!', 'ERR', '{}', '[[]]', 'NaN', '0xFF', 'SIGSEGV', 'OVERFLOW'];
-          
+
           ctx.save();
           ctx.translate(p.x, p.y);
-          
-          const rings = 3;
-          for (let r = 1; r <= rings; r++) {
-            const ringRadius = p.radius * progress * (r / rings);
-            const numChars = Math.floor(ringRadius / 5) + 4;
-            const fontSize = Math.max(10, 30 - r * 5);
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+
+          const rings = 5;
+          for (let r = 0; r < rings; r++) {
+            const ringProgress = (r + 1) / rings;
+            const ringRadius = p.radius * (0.18 + ringProgress * 0.92) * progress;
+            const charCount = Math.min(52, Math.max(8, Math.floor(ringRadius / 7) + r * 4));
+            const fontSize = Math.max(9, 24 - r * 3.2);
+            const wobble = 2.2 + r * 0.7;
             ctx.font = `bold ${fontSize}px monospace`;
-            ctx.fillStyle = `rgba(255, 60, 0, ${alpha * (1 - r/rings * 0.5)})`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            
-            for (let i = 0; i < numChars; i++) {
-              const angle = (i / numChars) * Math.PI * 2 + (Date.now() * 0.002 * r);
-              const char = explosionChars[(i + r) % explosionChars.length];
-              const cx = Math.cos(angle) * ringRadius;
-              const cy = Math.sin(angle) * ringRadius;
-              
+            const ringAlpha = alpha * (1 - r * 0.14);
+
+            for (let i = 0; i < charCount; i++) {
+              const t = i / charCount;
+              const angle = t * Math.PI * 2 + renderNow * (0.0014 + r * 0.00025);
+              const pulse = Math.sin(renderNow * 0.01 + i * 0.8 + r) * wobble;
+              const rr = ringRadius + pulse;
+              const cx = Math.cos(angle) * rr;
+              const cy = Math.sin(angle) * rr;
+              const token = explosionChars[(i + r + Math.floor(renderNow / 70)) % explosionChars.length];
+
               ctx.save();
               ctx.translate(cx, cy);
-              ctx.rotate(angle + Math.PI/2);
-              ctx.fillText(char, 0, 0);
+              ctx.rotate(angle + Math.PI / 2 + Math.sin(renderNow * 0.004 + i) * 0.15);
+              ctx.fillStyle = `rgba(${255 - r * 18}, ${120 - r * 10}, ${40 + r * 16}, ${Math.max(0.05, ringAlpha * (0.72 - t * 0.18))})`;
+              ctx.fillText(token, 0, 0);
               ctx.restore();
             }
           }
@@ -2816,11 +2861,11 @@ export default function App() {
           ctx.textBaseline = 'middle';
           
           const matrixChars = '01';
-          const scrollY = (Date.now() * 0.05) % 20;
+          const scrollY = (renderNow * 0.05) % 20;
           
           for (let mx = -p.radius; mx <= p.radius; mx += 15) {
             for (let my = -p.radius - 20; my <= p.radius; my += 20) {
-              const char = matrixChars[Math.floor(Math.abs(mx * my + Date.now()*0.001)) % matrixChars.length];
+              const char = matrixChars[Math.floor(Math.abs(mx * my + renderNow*0.001)) % matrixChars.length];
               ctx.fillText(char, p.x + mx, p.y + my + scrollY);
             }
           }
@@ -2859,14 +2904,16 @@ export default function App() {
           vlookup: ['VLOOKUP', '=>', 'MISS']
         };
         const seq = hostileTokens[eb.type] || ['ERR'];
-        const token = seq[Math.floor((Date.now() / 40 + eb.id) % seq.length)];
+        const token = seq[Math.floor((renderNow / 40 + eb.id) % seq.length)];
+
         const alpha = Math.max(0.35, eb.life / 300);
 
         ctx.fillStyle = `rgba(255, 70, 70, ${alpha})`;
         ctx.font = `bold ${Math.max(12, eb.size * 1.4)}px monospace`;
 
         for (let lane = -1; lane <= 1; lane++) {
-          const yJitter = Math.sin(Date.now() * 0.02 + eb.id + lane) * 2;
+          const yJitter = Math.sin(renderNow * 0.02 + eb.id + lane) * 2;
+
           ctx.fillText(token, 0, lane * 10 + yJitter);
         }
 
@@ -2898,7 +2945,7 @@ export default function App() {
           ctx.stroke();
         }
 
-        const phase = Date.now() * 0.002 + e.id;
+        const phase = renderNow * 0.002 + e.id;
         const baseColorMap: Record<string, string> = {
           Minion: '#a0a0a0',
           Elite: '#ff5a5a',
@@ -2930,7 +2977,7 @@ export default function App() {
         else if (e.type === 'REF') tokenPool = ['#REF!', '?', 'dangling'];
         else if (e.type === 'VLOOKUP') tokenPool = ['VLOOKUP', 'index', 'find'];
         else if (e.type === 'MACRO') tokenPool = ['macro()', 'exec', 'virus'];
-        else if (e.type === 'MINION') tokenPool = ['💣', 'bo0m', '!'];
+        else if (e.type === 'MINION') tokenPool = ['ERR', 'bomb()', '!!'];
 
         const baseColor = baseColorMap[e.type] || '#cccccc';
 
@@ -2942,7 +2989,8 @@ export default function App() {
           for (let layer = 0; layer < layers; layer++) {
             const r = Math.max(90, e.width * 0.28 - layer * 10);
             const chars = 80 + layer * 20;
-            ctx.fillStyle = `hsla(${(Date.now() / 8 + layer * 40) % 360}, 95%, ${45 + layer * 3}%, ${0.18 + layer * 0.05})`;
+            ctx.fillStyle = `hsla(${(renderNow / 8 + layer * 40) % 360}, 95%, ${45 + layer * 3}%, ${0.18 + layer * 0.05})`;
+
             ctx.font = `bold ${10 + layer}px monospace`;
             for (let i = 0; i < chars; i++) {
               const a = (i / chars) * Math.PI * 2 + phase * (0.6 + layer * 0.08);
@@ -2960,30 +3008,47 @@ export default function App() {
         } else {
           ctx.save();
           ctx.translate(e.x, e.y);
-          const lines = Math.max(2, Math.floor(e.height / 12));
-          const charsPerLine = Math.max(4, Math.floor(e.width / 16));
-          ctx.fillStyle = baseColor;
-          ctx.font = `bold ${Math.max(11, Math.min(18, e.height * 0.35))}px monospace`;
-          for (let row = 0; row < lines; row++) {
-            let line = '';
-            for (let col = 0; col < charsPerLine; col++) {
-              const t = tokenPool[Math.floor((Date.now() / 60 + row * 3 + col + e.id) % tokenPool.length)];
-              line += t[0] || 'x';
+
+          const bodyW = e.width * (0.82 + Math.sin(phase * 1.7) * 0.08);
+          const bodyH = e.height * (0.8 + Math.cos(phase * 1.45) * 0.1);
+          const bulges = 18;
+          ctx.beginPath();
+          for (let i = 0; i <= bulges; i++) {
+            const t = i / bulges;
+            const a = t * Math.PI * 2;
+            const irregular = 1 + Math.sin(a * 3 + phase * 2.6) * 0.17 + Math.sin(a * 7 - phase * 1.8) * 0.08;
+            const x = Math.cos(a) * bodyW * 0.55 * irregular;
+            const y = Math.sin(a) * bodyH * 0.55 * (1 + Math.cos(a * 4 + phase * 2.2) * 0.11);
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+          }
+          ctx.closePath();
+          ctx.clip();
+
+          const layers = 4;
+          const lineHeight = Math.max(10, Math.floor(e.height / 7));
+          for (let layer = 0; layer < layers; layer++) {
+            ctx.fillStyle = `hsla(${(renderNow / 11 + layer * 25) % 360}, 88%, ${46 + layer * 8}%, ${0.18 + layer * 0.13})`;
+            ctx.font = `bold ${Math.max(12, Math.min(26, e.height * 0.38 - layer * 1.5))}px monospace`;
+            const lines = Math.max(3, Math.floor(e.height / 8) + layer);
+            for (let row = 0; row < lines; row++) {
+              let line = '';
+              const charsPerLine = Math.max(8, Math.floor(e.width / 9));
+              for (let col = 0; col < charsPerLine; col++) {
+                const t = tokenPool[Math.floor((renderNow / 45 + row * 4 + col * (1.2 + layer * 0.2) + e.id + layer * 3) % tokenPool.length)];
+                line += (t?.[col % t.length] || t?.[0] || 'x');
+              }
+              const x = Math.sin(renderNow * 0.002 + row * 0.7 + layer) * (8 + layer * 4);
+              const y = (row - (lines - 1) / 2) * lineHeight + Math.cos(renderNow * 0.003 + row + layer) * 4;
+              ctx.fillText(line, x, y);
             }
-            const y = (row - (lines - 1) / 2) * 12;
-            ctx.fillText(line, 0, y);
           }
 
-          if (e.type !== 'Minion' && e.type !== 'SplitCell' && e.type !== 'MINION') {
-            ctx.strokeStyle = `rgba(255,255,255,0.35)`;
-            ctx.lineWidth = 1;
-            ctx.strokeRect(-e.width / 2, -e.height / 2, e.width, e.height);
-          }
           ctx.restore();
         }
 
         if (e.type === 'VLOOKUP' && e.state === 'aiming' && e.dashTargetX !== undefined && e.dashTargetY !== undefined) {
           ctx.beginPath();
+
           ctx.moveTo(e.x, e.y);
           ctx.lineTo(e.dashTargetX, e.dashTargetY);
           ctx.strokeStyle = `rgba(255, 50, 50, ${Math.max(0.2, 1 - (e.stateTimer || 0)/120)})`;
@@ -3007,7 +3072,7 @@ export default function App() {
           if (!isVisible(p.x - 40, p.y - 12, 80, 24)) return;
 
           const isMe = p.id === myId;
-          const now = Date.now();
+          const now = renderNow;
           const isInvincible = p.invincibleUntil && now < p.invincibleUntil;
           
           if (isInvincible) {
@@ -3065,7 +3130,10 @@ export default function App() {
         ctx.save();
         ctx.translate(b.x, b.y);
 
-        if (b.type !== 'wordart') {
+        if (b.angle !== undefined) {
+          ctx.rotate(b.angle);
+        } else {
+
           ctx.rotate(Math.atan2(b.vy, b.vx));
         }
 
@@ -3080,63 +3148,73 @@ export default function App() {
             ctx.scale(scaleX, scaleY);
           }
 
-          const codeWall = (b.isTitle ? '<<CODE_WALL::OVERRIDE>>' : '[push(code_block)]').repeat(2);
-          ctx.font = (b.isItalic ? 'italic ' : '') + `900 ${Math.max(24, b.size * 0.58)}px monospace`;
-          const grad = ctx.createLinearGradient(-b.size * 2, 0, b.size * 2, 0);
-          grad.addColorStop(0, '#44ffb0');
-          grad.addColorStop(0.5, '#6cecff');
-          grad.addColorStop(1, '#84ffd6');
-          ctx.fillStyle = grad;
-          ctx.strokeStyle = b.isShield ? '#9afcff' : '#0f1a1f';
-          ctx.lineWidth = b.isTitle ? 6 : 4;
-          ctx.shadowColor = b.isShield ? 'rgba(80,255,240,0.85)' : 'rgba(40,220,180,0.45)';
-          ctx.shadowBlur = b.isShield ? 20 : 10;
+          const stream = b.isTitle
+            ? '<<while(alive){push(code_wall);}>>'
+            : 'if(hit){++pressure;}else{advance();}';
+          const glyphSize = Math.max(14, b.size * 0.5);
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.strokeText(codeWall, 0, 0);
-          ctx.fillText(codeWall, 0, 0);
+          ctx.font = (b.isItalic ? 'italic ' : '') + `900 ${glyphSize}px monospace`;
+          ctx.shadowColor = b.isShield ? 'rgba(120,255,250,0.9)' : 'rgba(60,230,190,0.45)';
+          ctx.shadowBlur = b.isShield ? 18 : 9;
 
-          const scan = (Date.now() * 0.2) % (b.size * 1.2) - b.size * 0.6;
-          ctx.fillStyle = 'rgba(140,255,220,0.28)';
-          ctx.fillRect(-ctx.measureText(codeWall).width / 2 - 8, scan, ctx.measureText(codeWall).width + 16, 5);
+          const lanes = b.isTitle ? 7 : 5;
+          for (let lane = -Math.floor(lanes / 2); lane <= Math.floor(lanes / 2); lane++) {
+            const laneOffset = lane * (glyphSize * 0.64);
+            const laneAlpha = 0.5 + (1 - Math.abs(lane) / (lanes * 0.6)) * 0.45;
+            let out = '';
+            const len = b.isTitle ? 22 : 16;
+            for (let i = 0; i < len; i++) {
+              const idx = Math.floor((renderNow / 48 + i + lane * 2 + b.id) % stream.length);
+              out += stream[idx] || '#';
+            }
+            const xJitter = Math.sin(renderNow * 0.01 + lane * 0.7 + b.id) * 6;
+            const yJitter = Math.cos(renderNow * 0.009 + lane * 0.8 + b.id) * 2.5;
+            ctx.fillStyle = `rgba(${90 + Math.abs(lane) * 22},255,220,${laneAlpha})`;
+            ctx.fillText(out, xJitter, laneOffset + yJitter);
+          }
 
           if (b.isStrikethrough) {
             ctx.beginPath();
-            ctx.moveTo(-b.size * 2.6, 0);
-            ctx.lineTo(b.size * 2.6, 0);
+            ctx.moveTo(-b.size * 3.2, 0);
+            ctx.lineTo(b.size * 3.2, 0);
+
             ctx.strokeStyle = '#ff4b4b';
             ctx.lineWidth = 3;
             ctx.stroke();
           }
         } else if (b.type === 'sparkline') {
-          const token = ['=>', '::', '01', '{}'][Math.floor((Date.now() / 60 + b.id) % 4)];
+          const token = ['=>', '::', '01', '{}'][Math.floor((renderNow / 60 + b.id) % 4)];
+
           ctx.fillStyle = 'rgba(70,180,255,0.9)';
           ctx.font = `bold ${Math.max(12, b.size * 0.9)}px monospace`;
           for (let k = -2; k <= 2; k++) {
             const x = k * (b.size * 0.45);
-            const y = Math.sin(Date.now() * 0.01 + k + b.id) * 2;
+            const y = Math.sin(renderNow * 0.01 + k + b.id) * 2;
             ctx.fillText(token, x, y);
           }
         } else if (b.type === 'comment') {
-          const bomb = ['{', '}', '/', '*', '0', '1', 'x', ';'];
-          ctx.fillStyle = 'rgba(20,20,20,0.8)';
-          ctx.beginPath();
-          ctx.arc(0, 0, b.size/2, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = '#ff7f50';
-          ctx.lineWidth = 2;
-          ctx.stroke();
+          const bombTokens = ['#REF!', '#VALUE!', '{}', '[[]]', 'NaN', '0xFF', 'ERR', 'SIG'];
+          const radius = Math.max(8, b.size * 0.55);
+          const glyphs = 10;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
 
-          ctx.fillStyle = '#ff9b5e';
-          ctx.font = `bold ${Math.max(10, b.size * 0.55)}px monospace`;
-          const txt = bomb.map((_, i) => bomb[(i + b.id) % bomb.length]).join('').slice(0, 4);
-          ctx.fillText(txt, 0, 0);
+          for (let i = 0; i < glyphs; i++) {
+            const a = (i / glyphs) * Math.PI * 2 + renderNow * 0.012;
+            const rr = radius + Math.sin(renderNow * 0.02 + i) * 2;
+            const x = Math.cos(a) * rr;
+            const y = Math.sin(a) * rr;
+            const tok = bombTokens[(i + b.id) % bombTokens.length];
+            ctx.font = `bold ${Math.max(10, b.size * 0.5 - (i % 3))}px monospace`;
+            ctx.fillStyle = `rgba(255, ${140 - i * 6}, ${80 + i * 5}, ${0.75 - i * 0.03})`;
+            ctx.fillText(tok, x, y);
+          }
 
-          const sparkAngle = Date.now() * 0.015;
-          const sx = Math.cos(sparkAngle) * (b.size/2 + 5);
-          const sy = Math.sin(sparkAngle) * (b.size/2 + 5);
-          ctx.fillStyle = '#ffd166';
-          ctx.fillText('•', sx, sy);
+          ctx.font = `bold ${Math.max(11, b.size * 0.6)}px monospace`;
+          ctx.fillStyle = 'rgba(255,230,180,0.95)';
+          ctx.fillText('/*BOMB*/', 0, 0);
+
 
           if (b.isStrikethrough) {
             ctx.beginPath();
@@ -3154,7 +3232,8 @@ export default function App() {
           ctx.shadowColor = 'rgba(100,255,170,0.5)';
           ctx.shadowBlur = 6;
           const chars = ['0', '1', 'x', 'n', '{', '}', '[', ']', '='];
-          const char = chars[Math.floor((Date.now() / 50 + b.id) % chars.length)];
+          const char = chars[Math.floor((renderNow / 50 + b.id) % chars.length)];
+
           ctx.fillText(char, 0, 0);
           ctx.shadowBlur = 0;
 
@@ -3229,6 +3308,8 @@ export default function App() {
           const isUlt = l.width > 20; // Heuristic for ult laser
           const isCannon = l.isCannon;
           const alpha = Math.max(0, l.life / l.maxLife);
+          const visibleLaserRange = Math.min(l.range, canvas.width / SCALE + 320); //保留
+          const flow = (renderNow * 0.25) % 8;
           
           const sparklineChars = '01NaNnull{}[]()=>undefinedvoid0xFFerr%$#@!';
           
@@ -3237,27 +3318,29 @@ export default function App() {
             ctx.shadowBlur = 15;
             ctx.fillStyle = `rgba(50, 50, 50, ${alpha})`;
             ctx.font = 'bold 36px monospace';
-            const charCount = Math.floor(l.range / 14);
+            const charCount = Math.floor(visibleLaserRange / 9);
             for (let i = 0; i < charCount; i++) {
-              const dist = i * 14;
-              const seed = Math.floor(Date.now() / 50) + i;
+              const dist = i * 9 + flow;
+              const seed = Math.floor(renderNow / 50) + i;
+
               const char = sparklineChars[seed % sparklineChars.length];
-              const yOffset = Math.sin(dist * 0.05 + Date.now() * 0.01) * 15;
+              const yOffset = Math.sin(i * 0.35 + renderNow * 0.015) * 2;
               
               for (let w = -2; w <= 2; w++) {
-                ctx.fillText(char, dist, yOffset + w * 25);
+                ctx.fillText(char, dist, yOffset + w * 18);
               }
             }
           } else {
             ctx.fillStyle = `rgba(30, 30, 30, ${alpha})`;
             ctx.font = '14px monospace';
-            const charCount = Math.floor(l.range / 7);
+            const charCount = Math.floor(visibleLaserRange / 4);
             for (let i = 0; i < charCount; i++) {
-              const dist = i * 7;
-              const seed = Math.floor(Date.now() / 50) + i;
+              const dist = i * 4 + flow;
+              const seed = Math.floor(renderNow / 50) + i;
+
               const char = sparklineChars[seed % sparklineChars.length];
-              const yOffset = Math.sin(dist * 0.1 + Date.now() * 0.01) * 5;
-              const fade = 1 - (dist / l.range);
+              const yOffset = Math.sin(i * 0.42 + renderNow * 0.02) * 1.2;
+              const fade = 1 - (dist / visibleLaserRange);
               ctx.fillStyle = `rgba(30, 30, 30, ${alpha * fade})`;
               
               const widthMultiplier = isUlt ? 3 : 1;
