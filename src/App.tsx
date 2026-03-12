@@ -343,7 +343,7 @@ export default function App() {
           room.dynamicObstacles = [];
           return;
         }
-        room.players[myId].upgradesToChoose = (room.stage === 4 || room.stage === 8) ? 2 : 1;
+        room.players[myId].upgradesToChoose = (room.stage === 4 || room.stage === 8) ? 2 : 1; //保留
         room.isSelectingSkill = true;
         return;
       }
@@ -554,7 +554,7 @@ export default function App() {
         let speedMultiplier = 1;
         
         if (p.attackForm === 'wordart') {
-          speedMultiplier *= p.specificUpgrades.includes('wordart_all_caps') ? 0.9 : 0.7; // -10% or -30% speed
+          speedMultiplier *= p.specificUpgrades.includes('wordart_all_caps') ? 0.9 : 0.7; // -10% or -30% speed //保留
           if (p.specificUpgrades.includes('wordart_shield')) {
             speedMultiplier *= 0.85; // Additional -10% (relative to base, but multiplying is fine, or subtract)
           }
@@ -904,7 +904,7 @@ export default function App() {
               commentKnockbackMult *= 2;
             }
 
-            explosionRadius = Math.min(explosionRadius, 220);
+            explosionRadius = Math.min(explosionRadius, 220); //保留
             fireRate *= fireRateMult;
             bulletSpeed *= bulletSpeedMult;
 
@@ -1850,7 +1850,7 @@ export default function App() {
             
             if (b.isSuper || b.leavesResidue) { // comment_black or underline
               room.puddles.push({
-                id: room.puddleIdCounter++, x: b.x, y: b.y, radius: (b.explosionRadius || 70) * 1.15, type: 'burn_slow', life: 360, maxLife: 360, damage: b.damage * 0.14, owner: b.owner
+                id: room.puddleIdCounter++, x: b.x, y: b.y, radius: (b.explosionRadius || 70) * 1.15, type: 'burn_slow', life: 360, maxLife: 360, damage: b.damage * 0.14, owner: b.owner //保留
               });
               room.puddles.push({
                 id: room.puddleIdCounter++, x: b.x, y: b.y, radius: (b.explosionRadius || 70) * 0.8, type: 'blacken', life: 600, maxLife: 600, damage: 0, owner: b.owner
@@ -1896,7 +1896,7 @@ export default function App() {
           if (!b.isBulldozer && b.hitTargets && b.hitTargets.has(e.id)) continue;
 
           let isHit = false;
-          if (b.type === 'wordart' && b.width && b.height && b.angle !== undefined) {
+          if (b.type === 'wordart' && b.width && b.height && b.angle !== undefined) { //保留
             const dx = e.x - b.x;
             const dy = e.y - b.y;
             const cos = Math.cos(-b.angle);
@@ -2207,7 +2207,7 @@ export default function App() {
           }
         } else if ((!b.isBulldozer && checkObstacleCollision(b.x, b.y, b.size, b.size)) || 
             b.x < -100 || b.x > currentMap.width + 100 || b.y < -100 || b.y > currentMap.height + 100) {
-          if (b.type === 'comment' && ownerSpecific.includes('comment_wallbounce') && !b.wallBounced) {
+          if (b.type === 'comment' && ownerSpecific.includes('comment_wallbounce') && !b.wallBounced) { //保留
             const outX = b.x < 0 || b.x > currentMap.width;
             const outY = b.y < 0 || b.y > currentMap.height;
             if (outX) b.vx *= -1;
@@ -2237,7 +2237,7 @@ export default function App() {
         let blocked = false;
         for (const b of room.bullets) {
           if (b.type === 'wordart' && b.isShield && b.width && b.height) {
-            if (b.angle !== undefined) {
+            if (b.angle !== undefined) { //保留
               const dx = eb.x - b.x;
               const dy = eb.y - b.y;
               const cos = Math.cos(-b.angle);
@@ -2492,7 +2492,7 @@ export default function App() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     
-    const SCALE = 0.8;
+    const SCALE = 0.8; //保留
     const cameraX = me.x - canvas.width / (2 * SCALE);
     const cameraY = me.y - canvas.height / (2 * SCALE);
     
@@ -3294,7 +3294,7 @@ export default function App() {
           const isUlt = l.width > 20; // Heuristic for ult laser
           const isCannon = l.isCannon;
           const alpha = Math.max(0, l.life / l.maxLife);
-          const visibleLaserRange = Math.min(l.range, canvas.width / SCALE + 320);
+          const visibleLaserRange = Math.min(l.range, canvas.width / SCALE + 320); //保留
           const flow = (renderNow * 0.25) % 8;
           
           const sparklineChars = '01NaNnull{}[]()=>undefinedvoid0xFFerr%$#@!';
