@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AttackForm, Upgrade, SpecificUpgrade, GeneralUpgrade, Player, Enemy, Bullet, MAPS, Room, createRoom, EnemyType, ATTACK_FORM_NAMES, ATTACK_FORM_DESCS, UPGRADE_NAMES, UPGRADE_DESCS } from './gameLogic';
 import { MainMenu } from './components/MainMenu';
-import { GameOver, FormSelection, UpgradeSelection, SumSkillOverlay, GridMenu } from './components/UI';
+import { GameOver, FormSelection, UpgradeSelection, SumSkillOverlay, GridMenu, GridToolOverlay } from './components/UI';
 
 const getStageDuration = (stage: number) => {
   if (stage === 1) return 30;
@@ -30,7 +30,10 @@ function generateUpgradeChoices(room: Room, player: Player): Upgrade[] {
   const availableSpecific = formSpecific.filter(u => !player.specificUpgrades.includes(u));
 
   const allGeneral = ['bold', 'underline', 'highlight', 'rand', 'vlookup', 'sum', 'italic', 'strikethrough', 'ctrl_c', 'ctrl_z', 'format_painter'] as GeneralUpgrade[];
-  const availableGeneral = allGeneral.filter(u => !player.generalUpgrades.includes(u));
+  let availableGeneral = allGeneral.filter(u => !player.generalUpgrades.includes(u));
+  if (form === 'sparkline') {
+    availableGeneral = availableGeneral.filter(u => u !== 'format_painter');
+  }
 
   const has3Specific = player.specificUpgrades.length >= 3;
   const ult = formSpecific.find(u => u.endsWith('_ult'));
@@ -54,13 +57,17 @@ function generateUpgradeChoices(room: Room, player: Player): Upgrade[] {
     pool = pool.filter(u => u !== specificChoice);
   }
 
-  while (choices.length < 3 && pool.length > 0) {
-    // 40% chance to pick a specific upgrade if available, otherwise general
+  const numChoices = room.stage < 5 ? 5 : 3;
+
+  while (choices.length < numChoices && pool.length > 0) {
     const specificInPool = pool.filter(u => availableSpecific.includes(u as SpecificUpgrade));
     const generalInPool = pool.filter(u => availableGeneral.includes(u as GeneralUpgrade));
     
     let choice: Upgrade;
-    if (specificInPool.length > 0 && Math.random() < 0.4) {
+    // Prioritize specific upgrades in early game
+    const specificChance = room.stage < 5 ? 0.8 : 0.4;
+    
+    if (specificInPool.length > 0 && Math.random() < specificChance) {
       choice = specificInPool[Math.floor(Math.random() * specificInPool.length)];
     } else if (generalInPool.length > 0) {
       choice = generalInPool[Math.floor(Math.random() * generalInPool.length)];
@@ -148,6 +155,16 @@ export default function App() {
       if (e.key === 'a' || e.key === 'A') keys.current.a = true;
       if (e.key === 's' || e.key === 'S') keys.current.s = true;
       if (e.key === 'd' || e.key === 'D') keys.current.d = true;
+      if (e.key === ' ') {
+        const gs = gameStateRef.current;
+        if (gs && gs.players[myId]) {
+          const p = gs.players[myId];
+          if (p.gridToolCharges && p.gridToolCharges > 0 && gs.bulletTime <= 0) {
+            p.gridToolCharges--;
+            gs.bulletTime = 300;
+          }
+        }
+      }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -201,7 +218,11 @@ export default function App() {
           const dy = Math.abs(selectionEndRef.current.y - selectionStartRef.current.y);
           if (dx > 10 && dy > 10) {
             setShowGridMenu(true);
-            setGridMenuPos({ x: mouse.current.x, y: mouse.current.y });
+            let menuX = mouse.current.x;
+            let menuY = mouse.current.y;
+            if (menuX + 200 > window.innerWidth) menuX = window.innerWidth - 200;
+            if (menuY + 150 > window.innerHeight) menuY = window.innerHeight - 150;
+            setGridMenuPos({ x: menuX, y: menuY });
           } else {
             selectionStartRef.current = null;
             selectionEndRef.current = null;
@@ -274,6 +295,7 @@ export default function App() {
 
       if (room.stageTimer >= stageDuration && room.players[myId]?.specificUpgrades.length + room.players[myId]?.generalUpgrades.length < Object.keys(UPGRADE_NAMES).length) {
         room.skillChoices = generateUpgradeChoices(room, room.players[myId]);
+        room.players[myId].upgradesToChoose = room.stage < 5 ? 2 : 1;
         room.isSelectingSkill = true;
         return;
       }
@@ -329,11 +351,15 @@ export default function App() {
         for (let i = 0; i < bossCount; i++) {
           const spawner = currentMap.spawners[Math.floor(Math.random() * currentMap.spawners.length)];
           let bossHp = 3300 * Math.pow(1.12, room.stage - 5);
+          let spawnX = spawner.x + (Math.random() - 0.5) * 200;
+          let spawnY = spawner.y + (Math.random() - 0.5) * 200;
+          spawnX = Math.max(100, Math.min(currentMap.width - 100, spawnX));
+          spawnY = Math.max(100, Math.min(currentMap.height - 100, spawnY));
           room.enemies.push({
             id: room.enemyIdCounter++,
             type: 'EliteBoss',
-            x: spawner.x + (Math.random() - 0.5) * 200,
-            y: spawner.y + (Math.random() - 0.5) * 200,
+            x: spawnX,
+            y: spawnY,
             hp: bossHp,
             maxHp: bossHp,
             speed: 1.2 + Math.min(1.0, (room.stage - 5) * 0.05),
@@ -371,8 +397,7 @@ export default function App() {
 
           const r = Math.random();
           let eliteRatio = 0;
-          if (room.stage <= 3) eliteRatio = Math.min(0.20, (room.stage - 1) * 0.07);
-          else if (room.stage === 4) eliteRatio = 0.12;
+          if (room.stage <= 4) eliteRatio = Math.min(0.12, (room.stage - 1) * 0.04);
           else if (room.stage === 5) eliteRatio = 0.25;
           else eliteRatio = Math.min(0.65, 0.25 + (room.stage - 5) * 0.08);
 
@@ -486,11 +511,13 @@ export default function App() {
           }
         }
 
+        let inFormatPaint = false;
         for (const puddle of room.puddles) {
           if (Math.hypot(p.x - puddle.x, p.y - puddle.y) < puddle.radius) {
-            if (puddle.type === 'formatPaint') speedMultiplier *= 0.4;
+            if (puddle.type === 'formatPaint') inFormatPaint = true;
           }
         }
+        if (inFormatPaint) speedMultiplier *= 0.4;
         
         
         const speed = 6 * speedMultiplier;
@@ -516,9 +543,9 @@ export default function App() {
         for (let i = room.items.length - 1; i >= 0; i--) {
           const item = room.items[i];
           if (Math.hypot(p.x - item.x, p.y - item.y) < 50) {
-            room.bulletTime = 300; 
+            p.gridToolCharges = (p.gridToolCharges || 0) + 1;
             room.items.splice(i, 1);
-            shake.current = 10;
+            shake.current = 5;
           }
         }
 
@@ -555,8 +582,10 @@ export default function App() {
             damageMult *= 1.3;
             knockbackAdd += 6;
           }
-          const italicSpeedMult = general.includes('italic') ? 1.15 : 1;
-          const italicFireRateMult = general.includes('italic') ? 0.9 : 1;
+          if (general.includes('italic')) {
+            bulletSpeed *= 1.15;
+            fireRate *= 0.9;
+          }
           if (general.includes('strikethrough')) {
             pierce += 1;
             // Armor damage handled in collision if needed
@@ -627,9 +656,6 @@ export default function App() {
               fireRate /= 0.8;
             }
 
-            fireRate *= italicFireRateMult;
-            bulletSpeed *= italicSpeedMult;
-
             let wordWidth = size * 2.5;
             let wordHeight = size * 0.8;
 
@@ -687,8 +713,8 @@ export default function App() {
               fireCtrlC(finalDamage);
             }
           } else if (form === 'sparkline') {
-            fireRate = 220; // Balanced base frequency
-            damage = 8;
+            fireRate = 180; // High frequency
+            damage = 18;
             let range = 3000; // Infinite range
             let width = 12;
             let isSlow = false;
@@ -704,10 +730,8 @@ export default function App() {
               fireRate *= 0.6; // Very rapid
             }
             if (specific.includes('sparkline_overclock')) {
-              fireRate *= 0.625;
+              fireRate *= 0.5;
             }
-
-            fireRate *= italicFireRateMult;
 
             if (now - p.lastShot > fireRate && now > (p.sparklineVacuumUntil || 0)) {
               p.lastShot = now;
@@ -754,9 +778,9 @@ export default function App() {
             }
           } else if (form === 'comment') {
             fireRate = 600;
-            damage = 34;
+            damage = 50;
             bulletSpeed = 11.5; // 230px/s approx
-            let explosionRadius = 80;
+            let explosionRadius = 100;
             let count = 1;
 
             if (specific.includes('comment_size')) {
@@ -774,9 +798,6 @@ export default function App() {
             if (specific.includes('comment_knockback')) {
               knockbackMult = (knockbackMult || 1) * 2;
             }
-
-            fireRate *= italicFireRateMult;
-            bulletSpeed *= italicSpeedMult;
 
             explosionRadius = Math.min(explosionRadius, 160);
 
@@ -809,15 +830,14 @@ export default function App() {
                   damage: finalDamage,
                   size: 20,
                   pierce: pierce,
-                  life: 800, // Max flight time
-                  maxLife: 800,
+                  life: 3000, // Max flight time
+                  maxLife: 3000,
                   type: 'comment',
                   isCrit: isCrit,
                   explosionRadius: explosionRadius,
                   isUlt: isUlt,
                   eliteDamageMult: eliteDamageMult,
                   splitsLeft: specific.includes('comment_split') ? 1 : 0,
-                  splitGeneration: 0,
                   isHighlight: general.includes('highlight'),
                   leavesResidue: general.includes('underline') || specific.includes('comment_black'),
                   isItalic: general.includes('italic'),
@@ -856,9 +876,6 @@ export default function App() {
             if (specific.includes('array_big')) {
               bSize *= 2;
             }
-
-            fireRate *= italicFireRateMult;
-            bulletSpeed *= italicSpeedMult;
 
             count = Math.min(count, 8);
 
@@ -1420,8 +1437,17 @@ export default function App() {
           }
         }
 
-        let moveX = (e.vx * timeSpeed * (room.activeEvent === 'OOM' ? 0.5 : 1)) + e.knockbackX;
-        let moveY = (e.vy * timeSpeed * (room.activeEvent === 'OOM' ? 0.5 : 1)) + e.knockbackY;
+        let enemySpeedMult = 1;
+        for (const puddle of room.puddles) {
+          if (Math.hypot(e.x - puddle.x, e.y - puddle.y) < puddle.radius + e.width/2) {
+            if (puddle.type === 'burn_slow') enemySpeedMult = Math.min(enemySpeedMult, 0.2);
+            else if (puddle.type === 'formatPaint') enemySpeedMult = Math.min(enemySpeedMult, 0.4);
+            else if (puddle.type === 'slow_zone') enemySpeedMult = Math.min(enemySpeedMult, 0.1);
+          }
+        }
+
+        let moveX = (e.vx * enemySpeedMult * timeSpeed * (room.activeEvent === 'OOM' ? 0.5 : 1)) + e.knockbackX;
+        let moveY = (e.vy * enemySpeedMult * timeSpeed * (room.activeEvent === 'OOM' ? 0.5 : 1)) + e.knockbackY;
         
         e.knockbackX *= 0.8;
         e.knockbackY *= 0.8;
@@ -1432,17 +1458,12 @@ export default function App() {
         if (nearestP && minDist < (e.width/2 + 20)) {
           if (now > nearestP.invincibleUntil) {
             const wasAlive = nearestP.hp > 0;
-            nearestP.hp -= (e.type === 'EliteBoss' ? 0.5 : e.type === 'MiniBoss' ? 0.35 : 0.2) * timeSpeed;
+            nearestP.hp -= (e.type === 'EliteBoss' ? 10 : e.type === 'MiniBoss' ? 5 : 2) * timeSpeed;
             if (wasAlive && nearestP.hp <= 0) nearestP.deaths++;
           }
         }
 
         if (e.hp <= 0) {
-          const deathWords = ['DELETE', 'KILL', 'GG.EXE'];
-          particles.current.push({
-            x: e.x, y: e.y, vx: (Math.random()-0.5) * 3, vy: -2.5, life: 24,
-            text: deathWords[Math.floor(Math.random() * deathWords.length)], color: '#ff3b30'
-          });
           // Find the player who killed the enemy (simplified to nearest player for now)
           const killer = nearestP;
           if (killer) {
@@ -1541,7 +1562,6 @@ export default function App() {
 
         if (b.life <= 0) {
           if (b.type === 'comment') {
-            const commentOwner = room.players[b.owner];
             room.enemies.forEach(e => {
               if (Math.hypot(e.x - b.x, e.y - b.y) < (b.explosionRadius || 70) + e.width/2) {
                 let finalDamage = b.damage;
@@ -1549,32 +1569,10 @@ export default function App() {
                   finalDamage *= (b.eliteDamageMult || 1);
                 }
                 
-                const hpBeforeHit = e.hp;
                 if (b.isSuper && e.type !== 'EliteBoss' && e.type !== 'MiniBoss') {
                   e.hp = 0;
                 } else {
                   e.hp -= finalDamage;
-                }
-
-                if (hpBeforeHit > 0 && e.hp <= 0 && commentOwner?.specificUpgrades.includes('comment_chain') && Math.random() < 0.5) {
-                  const chainRadius = (b.explosionRadius || 70) * 0.55;
-                  room.enemies.forEach(other => {
-                    if (other.id === e.id || other.hp <= 0) return;
-                    if (Math.hypot(other.x - e.x, other.y - e.y) < chainRadius + other.width / 2) {
-                      other.hp -= b.damage * 0.5;
-                    }
-                  });
-                  room.puddles.push({
-                    id: room.puddleIdCounter++,
-                    x: e.x,
-                    y: e.y,
-                    radius: chainRadius,
-                    type: 'explosion',
-                    life: 20,
-                    maxLife: 20,
-                    damage: 0,
-                    owner: b.owner
-                  });
                 }
                 
                 // Explosion knockback
@@ -1583,6 +1581,27 @@ export default function App() {
                 kbResist /= (e.weight || 1);
                 e.vx += Math.cos(angle) * 15 * kbResist;
                 e.vy += Math.sin(angle) * 15 * kbResist;
+                
+                // comment_chain logic
+                if (e.hp <= 0) {
+                  const ownerPlayer = room.players[b.owner];
+                  if (ownerPlayer && ownerPlayer.specificUpgrades.includes('comment_chain') && Math.random() < 0.5) {
+                    if ((b.chainDepth || 0) < 3) { // Limit chain depth to prevent infinite loops
+                      room.bullets.push({
+                        ...b,
+                        id: room.bulletIdCounter++,
+                        x: e.x, y: e.y,
+                        life: 0, // Explode immediately next frame
+                        maxLife: 0,
+                        damage: b.damage * 0.5,
+                        explosionRadius: (b.explosionRadius || 70) * 0.8,
+                        splitsLeft: 0,
+                        chainDepth: (b.chainDepth || 0) + 1,
+                        hitTargets: new Set()
+                      });
+                    }
+                  }
+                }
               }
             });
             
@@ -1607,7 +1626,7 @@ export default function App() {
               });
             }
             
-            if (b.splitsLeft && b.splitsLeft > 0 && (b.splitGeneration || 0) < 2) {
+            if (b.splitsLeft && b.splitsLeft > 0) {
               for (let j = 0; j < 3; j++) {
                 const angle = Math.random() * Math.PI * 2;
                 const speed = 8 + Math.random() * 4;
@@ -1622,9 +1641,10 @@ export default function App() {
                   size: b.size * 0.6,
                   life: 30 + Math.random() * 20,
                   maxLife: 50,
-                  splitsLeft: b.splitsLeft - 1,
-                  splitGeneration: (b.splitGeneration || 0) + 1,
-                  pierce: 1
+                  splitsLeft: 0,
+                  chainDepth: 99, // Prevent chain from triggering on split bullets to avoid crazy loops
+                  pierce: 1,
+                  hitTargets: new Set()
                 });
               }
             }
@@ -1709,6 +1729,10 @@ export default function App() {
               
               if (b.isStrikethrough && e.hp > 0 && e.hp / e.maxHp <= 0.2 && e.type !== 'EliteBoss' && e.type !== 'MiniBoss') {
                 e.hp = 0;
+                const deathTexts = ['DELETE', 'KILL', 'GG.EXE'];
+                particles.current.push({
+                  x: e.x, y: e.y, vx: 0, vy: -1, life: 30, text: deathTexts[Math.floor(Math.random() * deathTexts.length)], color: '#ff0000'
+                });
               }
               
               if (e.hp > 0 && b.stunChance && Math.random() < b.stunChance) {
@@ -1726,14 +1750,23 @@ export default function App() {
                 });
               }
               
-              const damageLabel = finalDamage >= 100 ? `0x${Math.floor(finalDamage).toString(16).toUpperCase()}` : `-${Math.floor(finalDamage)}`;
+              let dmgText = `-${Math.floor(finalDamage)}${b.isCrit ? '!' : ''}`;
+              if (finalDamage >= 100) {
+                const hex = Math.floor(finalDamage).toString(16).toUpperCase();
+                dmgText = b.isCrit ? `CRIT:0x${hex}!!` : `-0x${hex}`;
+              }
+              
               particles.current.push({
                 x: e.x + (Math.random()-0.5)*30, y: e.y + (Math.random()-0.5)*30,
                 vx: (Math.random()-0.5)*6, vy: (Math.random()-0.5)*6 - 2,
-                life: 30 + Math.random()*20, text: b.isCrit ? `CRIT:${damageLabel}!!` : damageLabel, color: b.isCrit ? '#e81123' : '#666666'
+                life: 30 + Math.random()*20, text: dmgText, color: b.isCrit ? '#e81123' : '#666666'
               });
-
-              // Format Painter should stack with high/infinite pierce bullets as well.
+              
+              if (b.isHighlight && Math.random() < 0.3) {
+                room.puddles.push({
+                  id: room.puddleIdCounter++, x: e.x, y: e.y, radius: 80, type: 'highlight', life: 180, maxLife: 180, damage: b.damage * 0.3, owner: b.owner
+                });
+              }
               const ownerPlayer = room.players[b.owner];
               if (ownerPlayer && ownerPlayer.generalUpgrades.includes('format_painter') && Math.random() < 0.2) {
                 room.puddles.push({
@@ -1745,8 +1778,17 @@ export default function App() {
             if (b.isBulldozer && e.type !== 'EliteBoss' && e.type !== 'MiniBoss') {
               const prevX = e.x;
               const prevY = e.y;
-              e.x += b.vx * timeSpeed;
-              e.y += b.vy * timeSpeed;
+              
+              // Push them slightly faster than the bullet
+              e.x += b.vx * timeSpeed * 1.5;
+              e.y += b.vy * timeSpeed * 1.5;
+              
+              // Pull towards the center of the bullet to prevent slipping out
+              if (Math.abs(b.vx) > Math.abs(b.vy)) {
+                e.y += (b.y - e.y) * 0.2;
+              } else {
+                e.x += (b.x - e.x) * 0.2;
+              }
               
               let atWall = false;
               if (e.x <= e.width/2 || e.x >= currentMap.width - e.width/2 || 
@@ -1774,22 +1816,24 @@ export default function App() {
                     } else {
                       e.hp = 0;
                       shake.current = Math.max(shake.current, 10);
+                      const deathTexts = ['DELETE', 'KILL', 'GG.EXE'];
                       for(let i=0; i<5; i++) {
                         particles.current.push({
                           x: e.x, y: e.y,
                           vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10,
-                          life: 30, color: '#ff0000', text: 'CRUSH!'
+                          life: 30, color: '#ff0000', text: deathTexts[Math.floor(Math.random() * deathTexts.length)]
                         });
                       }
                     }
                   } else {
                     e.hp = 0;
                     shake.current = Math.max(shake.current, 10);
+                    const deathTexts = ['DELETE', 'KILL', 'GG.EXE'];
                     for(let i=0; i<5; i++) {
                       particles.current.push({
                         x: e.x, y: e.y,
                         vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10,
-                        life: 30, color: '#ff0000', text: 'CRUSH!'
+                        life: 30, color: '#ff0000', text: deathTexts[Math.floor(Math.random() * deathTexts.length)]
                       });
                     }
                   }
@@ -1853,7 +1897,8 @@ export default function App() {
                     vy: Math.sin(newAngle) * speed,
                     splitsLeft: 0,
                     pierce: 1,
-                    damage: b.damage * 0.45
+                    damage: b.damage * 0.45,
+                    hitTargets: new Set()
                   });
                 }
                 b.life = 0;
@@ -1867,11 +1912,6 @@ export default function App() {
         }
 
         if (hitEnemy && b.pierce <= 0) {
-          if (b.isHighlight) {
-            room.puddles.push({
-              id: room.puddleIdCounter++, x: b.x, y: b.y, radius: 80, type: 'highlight', life: 180, maxLife: 180, damage: b.damage * 0.3, owner: b.owner
-            });
-          }
           if (b.life > 0) {
             room.bullets.splice(i, 1);
           }
@@ -1938,8 +1978,6 @@ export default function App() {
           room.enemies.forEach(e => {
             if (Math.hypot(e.x - p.x, e.y - p.y) < p.radius + e.width/2) {
               e.hp -= p.damage || 0;
-              e.vx *= (p.type === 'burn_slow' ? 0.2 : 0.4);
-              e.vy *= (p.type === 'burn_slow' ? 0.2 : 0.4);
             }
           });
         }
@@ -2004,6 +2042,10 @@ export default function App() {
             // Strikethrough execute
             if (l.isStrikethrough && e.hp > 0 && e.hp / e.maxHp <= 0.2 && e.type !== 'EliteBoss' && e.type !== 'MiniBoss') {
               e.hp = 0;
+              const deathTexts = ['DELETE', 'KILL', 'GG.EXE'];
+              particles.current.push({
+                x: e.x, y: e.y, vx: 0, vy: -1, life: 30, text: deathTexts[Math.floor(Math.random() * deathTexts.length)], color: '#ff0000'
+              });
             }
             
             if (l.isCannon && e.type !== 'EliteBoss' && e.type !== 'MiniBoss') {
@@ -2022,11 +2064,16 @@ export default function App() {
             
             shake.current = Math.max(shake.current, 1);
             
-            const laserDamageLabel = finalDamage >= 100 ? `0x${Math.floor(finalDamage).toString(16).toUpperCase()}` : `-${Math.floor(finalDamage)}`;
+            let dmgText = `-${Math.floor(finalDamage)}${l.isCrit ? '!' : ''}`;
+            if (finalDamage >= 100) {
+              const hex = Math.floor(finalDamage).toString(16).toUpperCase();
+              dmgText = l.isCrit ? `CRIT:0x${hex}!!` : `-0x${hex}`;
+            }
+            
             particles.current.push({
               x: e.x + (Math.random()-0.5)*30, y: e.y + (Math.random()-0.5)*30,
               vx: (Math.random()-0.5)*6, vy: (Math.random()-0.5)*6 - 2,
-              life: 20 + Math.random()*10, text: l.isCrit ? `CRIT:${laserDamageLabel}!!` : laserDamageLabel, color: l.isCrit ? '#e81123' : '#0078d7'
+              life: 20 + Math.random()*10, text: dmgText, color: l.isCrit ? '#e81123' : '#0078d7'
             });
             
             // Format Painter
@@ -2146,7 +2193,7 @@ export default function App() {
     
     const p = room.players[myId];
     if (p) {
-      if (['bold', 'underline', 'highlight', 'rand', 'vlookup', 'sum', 'italic', 'strikethrough'].includes(upgrade)) {
+      if (['bold', 'underline', 'highlight', 'rand', 'vlookup', 'sum', 'italic', 'strikethrough', 'ctrl_c', 'ctrl_z', 'format_painter'].includes(upgrade)) {
         if (!p.generalUpgrades.includes(upgrade as GeneralUpgrade)) {
           p.generalUpgrades.push(upgrade as GeneralUpgrade);
         }
@@ -2155,7 +2202,16 @@ export default function App() {
           p.specificUpgrades.push(upgrade as SpecificUpgrade);
         }
       }
+      
+      p.upgradesToChoose = (p.upgradesToChoose || 1) - 1;
+      room.skillChoices = room.skillChoices.filter(u => u !== upgrade);
+      
+      if (p.upgradesToChoose > 0 && room.skillChoices.length > 0) {
+        setUiState(prev => prev ? { ...prev, skillChoices: room.skillChoices } : null);
+        return;
+      }
     }
+    
     p.readyForNextStage = true;
 
     room.isSelectingSkill = false;
@@ -2241,6 +2297,7 @@ export default function App() {
       
       ctx.fillStyle = bgColor;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
+
       let cameraX = me ? me.x - canvas.width / (2 * SCALE) : 0;
       let cameraY = me ? me.y - canvas.height / (2 * SCALE) : 0;
 
@@ -2380,60 +2437,80 @@ export default function App() {
 
       gameState.puddles?.forEach((p: any) => {
         if (!isVisible(p.x - p.radius, p.y - p.radius, p.radius * 2, p.radius * 2)) return;
-        if (p.type === 'formatPaint') {
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(255, 200, 0, ${Math.min(0.4, p.life / 500)})`;
-          ctx.fill();
-          ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(0.5, p.life / 500)})`;
-          ctx.font = '12px Consolas';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText('FMT', p.x, p.y);
+        
+        if (p.type === 'explosion') {
+          const progress = 1 - (p.life / p.maxLife);
+          const alpha = p.life / p.maxLife;
+          const explosionChars = ['#REF!', '#VALUE!', '#NULL!', 'ERR', '{}', '[[]]', 'NaN', '0xFF', 'SIGSEGV', 'OVERFLOW'];
+          
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          
+          const rings = 3;
+          for (let r = 1; r <= rings; r++) {
+            const ringRadius = p.radius * progress * (r / rings);
+            const numChars = Math.floor(ringRadius / 5) + 4;
+            const fontSize = Math.max(10, 30 - r * 5);
+            ctx.font = `bold ${fontSize}px monospace`;
+            ctx.fillStyle = `rgba(255, 60, 0, ${alpha * (1 - r/rings * 0.5)})`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            for (let i = 0; i < numChars; i++) {
+              const angle = (i / numChars) * Math.PI * 2 + (Date.now() * 0.002 * r);
+              const char = explosionChars[(i + r) % explosionChars.length];
+              const cx = Math.cos(angle) * ringRadius;
+              const cy = Math.sin(angle) * ringRadius;
+              
+              ctx.save();
+              ctx.translate(cx, cy);
+              ctx.rotate(angle + Math.PI/2);
+              ctx.fillText(char, 0, 0);
+              ctx.restore();
+            }
+          }
+          ctx.restore();
         } else if (p.type === 'highlight' || p.type === 'burn_slow') {
           ctx.save();
           ctx.beginPath();
           ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
           ctx.clip();
-          const cell = 16;
-          const palette = p.type === 'highlight' ? ['#a3ff00', '#d7ff5a', '#c4ff2e'] : ['#ff4500', '#ff7a18', '#ff3b00'];
-          ctx.font = 'bold 12px Consolas';
-          for (let yy = p.y - p.radius; yy <= p.y + p.radius; yy += cell) {
-            for (let xx = p.x - p.radius; xx <= p.x + p.radius; xx += cell) {
-              const t = Math.floor((Date.now() / 120) + xx * 0.08 + yy * 0.06);
-              const chars = p.type === 'highlight' ? 'H1GHL1GHT{}[]' : 'BURN_SLOW0xFF';
-              const ch = chars[Math.abs(t) % chars.length];
-              ctx.fillStyle = palette[Math.abs(t + 3) % palette.length];
-              ctx.globalAlpha = 0.15 + 0.2 * ((Math.sin(t * 0.5) + 1) / 2);
-              ctx.fillText(ch, xx, yy);
+          
+          const alpha = p.life / p.maxLife;
+          ctx.fillStyle = p.type === 'highlight' ? `rgba(154, 205, 50, ${0.3 * alpha})` : `rgba(255, 69, 0, ${0.4 * alpha})`;
+          ctx.fill(); // Base background
+          
+          ctx.fillStyle = p.type === 'highlight' ? `rgba(154, 205, 50, ${0.6 * alpha})` : `rgba(255, 69, 0, ${0.8 * alpha})`;
+          ctx.font = '12px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          
+          const matrixChars = '01';
+          const scrollY = (Date.now() * 0.05) % 20;
+          
+          for (let mx = -p.radius; mx <= p.radius; mx += 15) {
+            for (let my = -p.radius - 20; my <= p.radius; my += 20) {
+              const char = matrixChars[Math.floor(Math.abs(mx * my + Date.now()*0.001)) % matrixChars.length];
+              ctx.fillText(char, p.x + mx, p.y + my + scrollY);
             }
           }
-          ctx.globalAlpha = 1;
+          
           ctx.restore();
-        } else if (p.type === 'explosion') {
-          const progress = 1 - (p.life / Math.max(1, p.maxLife));
-          const tokens = ['#REF!', '#VALUE!', '#NULL!', 'ERR', '{}', '[[]]', 'NaN', '0xFF', 'SIGSEGV', 'OVERFLOW'];
-          for (let ring = 0; ring < 4; ring++) {
-            const ringR = p.radius * (0.2 + ring * 0.23 + progress * 0.45);
-            const count = 8 + ring * 6;
-            const fontSize = Math.max(9, 18 - ring * 3);
-            for (let k = 0; k < count; k++) {
-              const ang = (Math.PI * 2 * k) / count + progress * 0.5 + ring * 0.2;
-              const tx = p.x + Math.cos(ang) * ringR;
-              const ty = p.y + Math.sin(ang) * ringR;
-              const token = tokens[(k + ring + p.id) % tokens.length];
-              ctx.fillStyle = `rgba(255, ${120 - ring * 20}, ${40 + ring * 10}, ${Math.max(0.08, 0.8 - progress - ring * 0.15)})`;
-              ctx.font = `bold ${fontSize}px Consolas`;
-              ctx.textAlign = 'center';
-              ctx.textBaseline = 'middle';
-              ctx.fillText(token, tx, ty);
-            }
-          }
-        } else if (p.type === 'blacken') {
+        } else {
           ctx.beginPath();
           ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(0.8, p.life / 600)})`;
-          ctx.fill();
+          if (p.type === 'formatPaint') {
+            ctx.fillStyle = `rgba(255, 200, 0, ${Math.min(0.4, p.life / 500)})`;
+            ctx.fill();
+            ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(0.5, p.life / 500)})`;
+            ctx.font = '12px Calibri';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('🖌️', p.x, p.y);
+          } else if (p.type === 'blacken') {
+            ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(0.8, p.life / 600)})`;
+            ctx.fill();
+          }
         }
       });
 
@@ -2499,6 +2576,17 @@ export default function App() {
           ctx.strokeStyle = '#00a2ed';
           ctx.lineWidth = 4;
           ctx.stroke();
+        }
+        
+        if (e.spreadsheetMark && e.spreadsheetMark > Date.now()) {
+          ctx.save();
+          ctx.translate(e.x, e.y);
+          ctx.rotate(Date.now() * 0.005);
+          ctx.strokeStyle = '#107c41';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 5]);
+          ctx.strokeRect(-e.width/2 - 5, -e.height/2 - 5, e.width + 10, e.height + 10);
+          ctx.restore();
         }
         
         if (e.type === 'Minion') {
@@ -2665,14 +2753,14 @@ export default function App() {
           ctx.font = (b.isItalic ? 'italic ' : '') + '900 ' + b.size + 'px "Microsoft YaHei", Impact, sans-serif';
           
           // Enhanced visual for WordArt
-          const baseText = b.isTitle ? '大标题' : (b.wordartText || '推翻重做');
-          const glitchPool = ['烫烫烫', '锟斤拷', 'XXXX', '▓', '░', '▒'];
-          let text = baseText;
-          const frameKey = Math.floor(Date.now() / 48);
-          if (frameKey % 3 === 0 && baseText.length > 0) {
-            const idx = Math.abs((b.id + frameKey) % baseText.length);
-            const glitch = glitchPool[Math.abs((b.id * 3 + frameKey) % glitchPool.length)];
-            text = baseText.slice(0, idx) + glitch + baseText.slice(idx + 1);
+          let text = b.isTitle ? '大标题' : (b.wordartText || '推翻重做');
+          
+          // Randomly replace 1 character with gibberish every 3 frames
+          if (Math.floor(Date.now() / 50) % 3 === 0 && text.length > 0) {
+            const gibberish = ['烫烫烫', '锟斤拷', 'XXXX', '▓░▒'];
+            const replaceIdx = Math.floor(Math.random() * text.length);
+            const randGib = gibberish[Math.floor(Math.random() * gibberish.length)];
+            text = text.substring(0, replaceIdx) + randGib[0] + text.substring(replaceIdx + 1);
           }
           
           if (b.isTitle) {
@@ -2709,15 +2797,17 @@ export default function App() {
           
           ctx.strokeText(text, 0, 0);
           ctx.fillText(text, 0, 0);
-
-          const flicker = 0.18 + (Math.sin(Date.now() * 0.02 + b.id) + 1) * 0.12;
-          ctx.fillStyle = `rgba(0, 255, 120, ${flicker})`;
-          ctx.fillRect(-b.size * 2.2, -b.size * 0.12, b.size * 4.4, Math.max(2, b.size * 0.08));
           
           // Reset shadow
           ctx.shadowBlur = 0;
           ctx.shadowOffsetX = 0;
           ctx.shadowOffsetY = 0;
+          
+          // Semi-transparent green scanline
+          const textWidth = ctx.measureText(text).width;
+          const scanlineY = (Date.now() * 0.1) % b.size - b.size/2;
+          ctx.fillStyle = `rgba(0, 255, 0, ${0.3 + 0.2 * Math.sin(Date.now() * 0.02)})`;
+          ctx.fillRect(-textWidth/2 - 10, scanlineY, textWidth + 20, 4);
           
           if (b.isStrikethrough) {
             ctx.beginPath();
@@ -2735,16 +2825,27 @@ export default function App() {
           ctx.lineWidth = b.isBold ? 6 : 3;
           ctx.stroke();
         } else if (b.type === 'comment') {
-          ctx.fillStyle = '#fff2ab';
-          ctx.fillRect(-b.size/2, -b.size/2, b.size, b.size);
-          ctx.strokeStyle = '#c8c6c4';
-          ctx.lineWidth = 1;
-          ctx.strokeRect(-b.size/2, -b.size/2, b.size, b.size);
-          ctx.fillStyle = '#000000';
-          ctx.font = (b.isItalic ? 'italic ' : '') + '10px Calibri';
+          ctx.fillStyle = '#222';
+          ctx.beginPath();
+          ctx.arc(0, 0, b.size/2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#ff4400';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          
+          ctx.fillStyle = '#ff4400';
+          ctx.font = 'bold 12px monospace';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('批注', 0, 0);
+          const bombText = '/**/';
+          ctx.fillText(bombText, 0, 0);
+          
+          // Add a little fuse spark
+          const sparkAngle = Date.now() * 0.01;
+          const sx = Math.cos(sparkAngle) * (b.size/2 + 4);
+          const sy = Math.sin(sparkAngle) * (b.size/2 + 4);
+          ctx.fillStyle = '#ffff00';
+          ctx.fillRect(sx - 2, sy - 2, 4, 4);
           
           if (b.isStrikethrough) {
             ctx.beginPath();
@@ -2837,31 +2938,48 @@ export default function App() {
         ctx.rotate(l.angle);
         
         if (l.type === 'sparkline') {
-          const stream = '01NaNnull{}[]()=>undefinedvoid0xFFerr%$#@!';
-          const step = l.isCannon ? 11 : 18;
-          const fontSize = l.isCannon ? 20 : Math.max(12, l.width * 1.2);
-          const amp = l.isCannon ? 9 : 5;
-          const density = l.isCannon ? 2 : 1;
-          for (let d = 0; d < l.range; d += step) {
-            for (let n = 0; n < density; n++) {
-              const wobble = Math.sin((Date.now() * 0.008) + d * 0.03 + n) * amp;
-              const ch = stream[Math.abs(Math.floor((Date.now() * 0.05) + d + l.id * 7 + n * 13)) % stream.length];
-              const fade = Math.max(0.15, 1 - d / l.range);
-              ctx.font = `bold ${fontSize}px Consolas`;
-              ctx.textAlign = 'center';
-              ctx.textBaseline = 'middle';
-              ctx.fillStyle = l.isStrikethrough
-                ? `rgba(255, 60, 60, ${fade * (l.life / l.maxLife)})`
-                : `rgba(80, 255, 120, ${fade * (l.life / l.maxLife)})`;
-              if (l.isCannon) {
-                ctx.shadowColor = 'rgba(80, 255, 120, 0.9)';
-                ctx.shadowBlur = 14;
-              } else {
-                ctx.shadowBlur = 0;
+          const isUlt = l.width > 20; // Heuristic for ult laser
+          const isCannon = l.isCannon;
+          const alpha = Math.max(0, l.life / l.maxLife);
+          
+          const sparklineChars = '01NaNnull{}[]()=>undefinedvoid0xFFerr%$#@!';
+          
+          if (isCannon) {
+            ctx.shadowColor = `rgba(0, 0, 0, ${alpha})`;
+            ctx.shadowBlur = 15;
+            ctx.fillStyle = `rgba(50, 50, 50, ${alpha})`;
+            ctx.font = 'bold 36px monospace';
+            const charCount = Math.floor(l.range / 20);
+            for (let i = 0; i < charCount; i++) {
+              const dist = i * 20;
+              const seed = Math.floor(Date.now() / 50) + i;
+              const char = sparklineChars[seed % sparklineChars.length];
+              const yOffset = Math.sin(dist * 0.05 + Date.now() * 0.01) * 15;
+              
+              for (let w = -2; w <= 2; w++) {
+                ctx.fillText(char, dist, yOffset + w * 25);
               }
-              ctx.fillText(ch, d, wobble + (n === 0 ? 0 : -wobble * 0.6));
+            }
+          } else {
+            ctx.fillStyle = `rgba(30, 30, 30, ${alpha})`;
+            ctx.font = '14px monospace';
+            const charCount = Math.floor(l.range / 10);
+            for (let i = 0; i < charCount; i++) {
+              const dist = i * 10;
+              const seed = Math.floor(Date.now() / 50) + i;
+              const char = sparklineChars[seed % sparklineChars.length];
+              const yOffset = Math.sin(dist * 0.1 + Date.now() * 0.01) * 5;
+              const fade = 1 - (dist / l.range);
+              ctx.fillStyle = `rgba(30, 30, 30, ${alpha * fade})`;
+              
+              const widthMultiplier = isUlt ? 3 : 1;
+              for (let w = -widthMultiplier; w <= widthMultiplier; w++) {
+                ctx.fillText(char, dist, yOffset + w * 12);
+              }
             }
           }
+          
+          // Reset shadow
           ctx.shadowBlur = 0;
         } else {
           ctx.fillStyle = `rgba(232, 17, 35, ${l.life / 30})`;
@@ -2870,7 +2988,7 @@ export default function App() {
           ctx.textBaseline = 'middle';
           ctx.shadowColor = '#e81123';
           ctx.shadowBlur = 10;
-          const laserStr = '%***&&%%…………&'.repeat(20);
+          const laserStr = "%***&&%%…………&".repeat(20);
           ctx.fillText(laserStr, 0, 0);
         }
         ctx.restore();
@@ -2881,7 +2999,7 @@ export default function App() {
         p.y += p.vy;
         p.life--;
         ctx.fillStyle = p.color;
-        ctx.font = p.color === '#e81123' ? 'bold 20px Consolas' : 'bold 14px Consolas';
+        ctx.font = p.color === '#e81123' ? 'bold 20px Calibri' : 'bold 14px Calibri';
         ctx.globalAlpha = Math.max(0, p.life / 30);
         ctx.fillText(p.text, p.x, p.y);
       });
@@ -3051,6 +3169,10 @@ export default function App() {
           />
         )}
 
+        {(me?.gridToolCharges ?? 0) > 0 && (
+          <GridToolOverlay charges={me!.gridToolCharges!} />
+        )}
+
         {showGridMenu && (
           <GridMenu 
             pos={gridMenuPos} 
@@ -3073,6 +3195,7 @@ export default function App() {
           <UpgradeSelection 
             stage={uiState.stage} 
             upgradeChoices={uiState.skillChoices} 
+            upgradesToChoose={me?.upgradesToChoose || 1}
             onSelect={handleSelectUpgrade} 
           />
         )}

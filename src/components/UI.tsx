@@ -47,13 +47,14 @@ export const FormSelection: React.FC<{
 export const UpgradeSelection: React.FC<{
   stage: number;
   upgradeChoices: Upgrade[];
+  upgradesToChoose: number;
   onSelect: (upgrade: Upgrade) => void;
-}> = ({ stage, upgradeChoices, onSelect }) => {
+}> = ({ stage, upgradeChoices, upgradesToChoose, onSelect }) => {
   return (
     <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-20 p-4">
       <div className="bg-white p-6 rounded shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
-        <h2 className="text-2xl font-bold mb-2 text-gray-800 shrink-0">格式化完成！选择一项新能力</h2>
-        <p className="text-gray-600 mb-6 shrink-0">准备进入第 {stage + 1} 关</p>
+        <h2 className="text-2xl font-bold mb-2 text-gray-800 shrink-0">格式化完成！选择新能力</h2>
+        <p className="text-gray-600 mb-6 shrink-0">准备进入第 {stage + 1} 关 (还可选择 {upgradesToChoose} 项)</p>
         
         <div className="grid grid-cols-1 gap-4 overflow-y-auto flex-1 pr-2">
           {upgradeChoices.map(upgrade => (
@@ -79,6 +80,20 @@ export const UpgradeSelection: React.FC<{
     </div>
   );
 };
+
+export const GridToolOverlay: React.FC<{ charges: number }> = ({ charges }) => (
+  <div className="absolute top-4 right-4 bg-white/90 p-3 rounded shadow-md text-xs border-l-4 border-green-500 pointer-events-none z-10 flex flex-col items-end">
+    <div className="font-bold text-green-700 mb-1">网格工具 (Grid Tool)</div>
+    <div className="text-gray-700 font-bold text-lg">
+      可用次数: {charges}
+    </div>
+    {charges > 0 && (
+      <div className="text-green-600 mt-1 font-bold animate-pulse">
+        按 [空格键] 激活时间暂停！
+      </div>
+    )}
+  </div>
+);
 
 export const SumSkillOverlay: React.FC<{ sumStacks: number; knockbackMult: number; sizeMult: number; eliteDamageMult: number }> = ({ sumStacks, knockbackMult, sizeMult, eliteDamageMult }) => (
   <div className="absolute top-4 left-4 bg-white/90 p-3 rounded shadow-md text-xs border-l-4 border-blue-500 pointer-events-none z-10">

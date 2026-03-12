@@ -5,10 +5,10 @@ export type SpecificUpgrade =
   | 'sparkline_width' | 'sparkline_focus' | 'sparkline_bounce' | 'sparkline_rapid' | 'sparkline_ult'
   | 'comment_size' | 'comment_chain' | 'comment_residue' | 'comment_fast' | 'comment_ult'
   | 'array_count' | 'array_split' | 'array_track' | 'array_fast' | 'array_ult'
-  | 'wordart_wide' | 'wordart_fast_push' | 'wordart_shield' | 'wordart_stun' | 'wordart_quad'
-  | 'array_plus_2' | 'array_rapid' | 'array_bounce' | 'array_pierce' | 'array_big'
-  | 'sparkline_freeze' | 'sparkline_cannon' | 'sparkline_reflect' | 'sparkline_overclock'
-  | 'comment_triple' | 'comment_knockback' | 'comment_split' | 'comment_black' | 'comment_super';
+  | 'wordart_wide' | 'wordart_fast_push' | 'wordart_shield' | 'wordart_stun' | 'wordart_quad' | 'wordart_pile_driver' | 'wordart_column_freeze'
+  | 'array_plus_2' | 'array_rapid' | 'array_bounce' | 'array_pierce' | 'array_big' | 'array_spreadsheet'
+  | 'sparkline_freeze' | 'sparkline_cannon' | 'sparkline_reflect' | 'sparkline_overclock' | 'sparkline_burn_stack' | 'sparkline_overload'
+  | 'comment_triple' | 'comment_knockback' | 'comment_split' | 'comment_black' | 'comment_super' | 'comment_gravity_well';
 
 export type GeneralUpgrade = 'bold' | 'underline' | 'highlight' | 'rand' | 'vlookup' | 'sum' | 'italic' | 'strikethrough' | 'ctrl_c' | 'ctrl_z' | 'format_painter';
 
@@ -168,6 +168,8 @@ export interface Player {
   wordartCounter: number;
   commentCounter: number;
   ctrlZUsed?: boolean;
+  gridToolCharges?: number;
+  upgradesToChoose?: number;
 }
 
 export interface AoeWarning {
@@ -260,6 +262,8 @@ export interface Bullet {
   bouncesLeft?: number;
   isItalic?: boolean;
   isStrikethrough?: boolean;
+  isBlacken?: boolean;
+  chainDepth?: number;
   isBulldozer?: boolean;
   hitTargets?: Set<number>;
   angle?: number;
@@ -268,7 +272,6 @@ export interface Bullet {
   isShield?: boolean;
   stunChance?: number;
   isSuper?: boolean;
-  splitGeneration?: number;
 }
 
 export interface Laser {
