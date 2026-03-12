@@ -268,6 +268,7 @@ export interface Bullet {
   isShield?: boolean;
   stunChance?: number;
   isSuper?: boolean;
+  splitGeneration?: number;
 }
 
 export interface Laser {
