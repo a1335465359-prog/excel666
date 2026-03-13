@@ -51,6 +51,7 @@ export function attachInputHandlers(deps: InputHandlerDeps): () => void {
     if (e.key === 's' || e.key === 'S') keys.current.s = true;
     if (e.key === 'd' || e.key === 'D') keys.current.d = true;
     if (e.key === ' ') {
+      const gs = gameStateRef.current;
       if (gs && gs.players[myId]) {
         const p = gs.players[myId];
         if (p.gridToolCharges && p.gridToolCharges > 0 && gs.bulletTime <= 0) {
