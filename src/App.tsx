@@ -3230,6 +3230,20 @@ export default function App() {
               ctx.fillStyle = `rgba(18,18,18,${alpha * fade})`;
               for (let w = -thickness; w <= thickness; w++) {
                 ctx.fillText(char, dist, w * 10);
+            // 普通激光：字符流
+            ctx.font = codeFont(14);
+            const charCount = Math.floor(l.range / 10);
+            for (let i = 0; i < charCount; i++) {
+              const dist = i * 10;
+              const char = '01NaNnull{}[]()=>undefinedvoid0xFFerr%$#@!'[(Math.floor(now/50)+i)%42];
+              const yOffset = Math.sin(dist * 0.03 + now * 0.02) * 2;
+              const streamOffset = (now * 0.35) % 10;
+              const fade = 1 - (dist / l.range);
+              ctx.fillStyle = `rgba(30,30,30,${alpha * fade})`;
+              
+              const widthMultiplier = l.width > 20 ? 3 : 1;
+              for (let w = -widthMultiplier; w <= widthMultiplier; w++) {
+                ctx.fillText(char, dist + streamOffset, yOffset + w * 12);
               }
             }
           }
