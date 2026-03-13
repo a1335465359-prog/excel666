@@ -809,8 +809,8 @@ export default function App() {
                   damage: finalDamage * dmgMult,
                   width: width + extraWidth,
                   range: range,
-                  life: 15,
-                  maxLife: 15,
+                  life: 10,
+                  maxLife: 10,
                   type: 'sparkline',
                   isCrit: isCrit,
                   eliteDamageMult: eliteDamageMult,
@@ -1973,7 +1973,7 @@ export default function App() {
               }
             }
 
-            if (b.isBulldozer && e.type !== 'EliteBoss' && e.type !== 'MiniBoss') {
+            if (b.isBulldozer) {
               const prevX = e.x;
               const prevY = e.y;
               
@@ -2013,42 +2013,24 @@ export default function App() {
 
               if (atWall) {
                 if (!e.crushCooldown || now > e.crushCooldown) {
-                  const isElite = e.type !== 'Minion' && e.type !== 'MINION';
-                  if (isElite) {
-                    if (!e.crushCount) {
-                      e.crushCount = 1;
-                      e.crushCooldown = now + 1000; // 1 second cooldown
-                      e.hp -= e.maxHp * 0.5; // Deal 50% damage
-                      shake.current = Math.max(shake.current, 5);
-                      particles.current.push({
-                        x: e.x, y: e.y,
-                        vx: 0, vy: -2,
-                        life: 30, color: '#ffaa00', text: 'CRUSH 1/2!'
-                      });
-                    } else {
-                      e.hp = 0;
-                      shake.current = Math.max(shake.current, 10);
-                      const deathTexts = ['DELETE', 'KILL', 'GG.EXE'];
-                      for(let i=0; i<5; i++) {
-                        particles.current.push({
-                          x: e.x, y: e.y,
-                          vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10,
-                          life: 30, color: '#ff0000', text: deathTexts[Math.floor(Math.random() * deathTexts.length)]
-                        });
-                      }
-                    }
+                  e.crushCooldown = now + 700;
+                  let wallDamage = 0;
+                  if (e.type === 'EliteBoss') {
+                    wallDamage = e.maxHp * 0.2;
+                  } else if (e.type === 'MiniBoss') {
+                    wallDamage = e.maxHp / 3;
                   } else {
-                    e.hp = 0;
-                    shake.current = Math.max(shake.current, 10);
-                    const deathTexts = ['DELETE', 'KILL', 'GG.EXE'];
-                    for(let i=0; i<5; i++) {
-                      particles.current.push({
-                        x: e.x, y: e.y,
-                        vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10,
-                        life: 30, color: '#ff0000', text: deathTexts[Math.floor(Math.random() * deathTexts.length)]
-                      });
-                    }
+                    wallDamage = e.maxHp;
                   }
+                  e.hp -= wallDamage;
+                  shake.current = Math.max(shake.current, e.type === 'EliteBoss' ? 8 : 10);
+                  particles.current.push({
+                    x: e.x, y: e.y,
+                    vx: 0, vy: -2,
+                    life: 30,
+                    color: '#111111',
+                    text: e.type === 'EliteBoss' ? 'WALL -20%' : (e.type === 'MiniBoss' ? 'WALL -33%' : 'CRUSH!')
+                  });
                 }
               }
             } else if (firstHit) {
@@ -2341,8 +2323,8 @@ export default function App() {
                   damage: l.damage * 0.5,
                   width: l.width,
                   range: 3000,
-                  life: 15,
-                  maxLife: 15,
+                  life: 10,
+                  maxLife: 10,
                   type: 'sparkline',
                   isCrit: l.isCrit,
                   eliteDamageMult: l.eliteDamageMult,
@@ -3066,50 +3048,45 @@ export default function App() {
           ctx.save();
           ctx.translate(b.x, b.y);
           ctx.rotate(b.angle || 0);
-          
-          if (b.isTitle) {
-            // 巨型大标题清场特效
-            const scale = 1 + Math.sin(now * 0.01) * 0.1;
-            ctx.scale(scale, scale);
-            ctx.font = cnFont(48);
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            
-            // 红色渐变
-            const grad = ctx.createLinearGradient(0, -24, 0, 24);
-            grad.addColorStop(0, '#ff4d4f');
-            grad.addColorStop(1, '#cf1322');
-            
-            ctx.shadowColor = 'rgba(207,19,34,0.8)';
-            ctx.shadowBlur = 15;
-            ctx.fillStyle = grad;
-            ctx.fillText(b.text || '清场', 0, 0);
-            
-            ctx.shadowBlur = 0;
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = '#ffffff';
-            ctx.strokeText(b.text || '清场', 0, 0);
-          } else {
-            // 普通 WordArt 子弹：绿色填充，前端白色发光
-            ctx.font = boldCode(14);
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            
-            ctx.shadowColor = '#2ea043';
-            ctx.shadowBlur = 8;
-            ctx.fillStyle = '#2ea043';
-            
-            // 动态字符
-            const chars = ['0','1','A','B','C','D','E','F'];
-            const char = chars[Math.floor(now/100 + b.id) % chars.length];
-            ctx.fillText(char, 0, 0);
-            
-            // 扫描线特效
-            ctx.fillStyle = 'rgba(46,160,67,0.3)';
-            ctx.fillRect(-8, -8 + (now/20)%16, 16, 2);
+
+          const wallW = Math.max(140, b.width || b.size * 2.6 || 180);
+          const wallH = Math.max(56, b.height || b.size * 0.95 || 64);
+
+          const bodyGrad = ctx.createLinearGradient(-wallW/2, 0, wallW/2, 0);
+          bodyGrad.addColorStop(0, '#050505');
+          bodyGrad.addColorStop(0.6, '#121212');
+          bodyGrad.addColorStop(1, '#1f1f1f');
+          ctx.fillStyle = bodyGrad;
+          ctx.fillRect(-wallW/2, -wallH/2, wallW, wallH);
+
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = '#2b2b2b';
+          ctx.strokeRect(-wallW/2, -wallH/2, wallW, wallH);
+
+          const frontGlow = ctx.createLinearGradient(wallW * 0.15, 0, wallW/2 + 20, 0);
+          frontGlow.addColorStop(0, 'rgba(120,120,120,0.0)');
+          frontGlow.addColorStop(1, 'rgba(220,220,220,0.35)');
+          ctx.fillStyle = frontGlow;
+          ctx.fillRect(-wallW/2, -wallH/2, wallW + 22, wallH);
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(-wallW/2 + 6, -wallH/2 + 6, wallW - 12, wallH - 12);
+          ctx.clip();
+          ctx.font = codeFont(Math.max(10, Math.min(14, wallH * 0.18)));
+          ctx.textBaseline = 'middle';
+          const codeRow = 'if(x){return 0;} const err = null; // #### ';
+          const flow = ((Date.now() * 0.22) % 80);
+          for (let row = 0; row < 4; row++) {
+            const y = -wallH/2 + 14 + row * (wallH - 24) / 3;
+            ctx.fillStyle = row % 2 === 0 ? 'rgba(170,170,170,0.26)' : 'rgba(110,110,110,0.24)';
+            ctx.fillText(codeRow.repeat(4), -wallW/2 - flow, y);
           }
           ctx.restore();
 
+          ctx.fillStyle = 'rgba(255,255,255,0.12)';
+          ctx.fillRect(wallW/2 - 10, -wallH/2, 10, wallH);
+          ctx.restore();
         } else if (b.type === 'array') {
           ctx.save();
           ctx.translate(b.x, b.y);
@@ -3225,27 +3202,34 @@ export default function App() {
         ctx.translate(l.x, l.y);
         ctx.rotate(l.angle);
         const now = Date.now();
-        
+
         if (l.type === 'sparkline') {
-          const isCannon = l.isCannon;
           const alpha = Math.max(0, l.life / l.maxLife);
-          
-          if (isCannon) {
-            // 巨型激光：大号重复字符
+          const progress = 1 - alpha;
+
+          if (l.isCannon) {
             ctx.shadowColor = `rgba(0,0,0,${alpha})`;
-            ctx.shadowBlur = 15;
-            ctx.fillStyle = `rgba(50,50,50,${alpha})`;
-            ctx.font = boldCode(36);
-            const charCount = Math.floor(l.range / 20);
-            for (let i = 0; i < charCount; i++) {
-              const dist = i * 20;
-              const char = '01NaNnull{}[]()=>undefinedvoid0xFFerr%$#@!'[(Math.floor(now/50)+i)%42];
-              const yOffset = Math.sin(dist*0.05 + now*0.01) * 15;
-              for (let w = -2; w <= 2; w++) {
-                ctx.fillText(char, dist, yOffset + w * 25);
-              }
+            ctx.shadowBlur = 12;
+            ctx.font = boldCode(30 + Math.floor((1 - alpha) * 10));
+            const head = progress * l.range;
+            const length = Math.min(l.range, 900);
+            for (let dist = Math.max(0, head - length); dist < head; dist += 16) {
+              const fade = 1 - (head - dist) / length;
+              ctx.fillStyle = `rgba(30,30,30,${0.9 * fade * alpha})`;
+              const char = '01NaNnull{}[]()=>undefinedvoid0xFFerr%$#@!'[(Math.floor(dist / 12) + Math.floor(now / 40)) % 42];
+              for (let w = -3; w <= 3; w++) ctx.fillText(char, dist, w * 18);
             }
           } else {
+            const head = progress * l.range;
+            const beamLen = Math.min(720, 240 + l.width * 14);
+            const thickness = Math.max(1, Math.floor((l.width / 8) * (1.3 - alpha * 0.5)));
+            ctx.font = codeFont(12 + Math.min(8, Math.floor(l.width / 4)));
+            for (let dist = Math.max(0, head - beamLen); dist < head; dist += 9) {
+              const fade = 1 - (head - dist) / beamLen;
+              const char = '01NaNnull{}[]()=>undefinedvoid0xFFerr%$#@!'[(Math.floor(dist / 8) + Math.floor(now / 55)) % 42];
+              ctx.fillStyle = `rgba(18,18,18,${alpha * fade})`;
+              for (let w = -thickness; w <= thickness; w++) {
+                ctx.fillText(char, dist, w * 10);
             // 普通激光：字符流
             ctx.font = codeFont(14);
             const charCount = Math.floor(l.range / 10);
