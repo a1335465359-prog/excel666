@@ -17,19 +17,20 @@ function generateUpgradeChoices(room: Room, player: Player): Upgrade[] {
 
   const allSpecific = [
     'wordart_size', 'wordart_weight', 'wordart_spread', 'wordart_title', 'wordart_ult',
-    'wordart_wide', 'wordart_fast_push', 'wordart_shield', 'wordart_stun', 'wordart_quad',
+    'wordart_wide', 'wordart_momentum', 'wordart_shield', 'wordart_stun', 'wordart_quad',
     'sparkline_width', 'sparkline_focus', 'sparkline_bounce', 'sparkline_rapid', 'sparkline_ult',
-    'sparkline_freeze', 'sparkline_cannon', 'sparkline_reflect', 'sparkline_overclock',
+    'sparkline_freeze', 'sparkline_cannon', 'sparkline_reflect', 'sparkline_overclock', 'sparkline_resonance', 'sparkline_execute',
     'comment_size', 'comment_chain', 'comment_residue', 'comment_fast', 'comment_ult',
     'comment_triple', 'comment_knockback', 'comment_split', 'comment_black', 'comment_super',
     'array_count', 'array_split', 'array_track', 'array_fast', 'array_ult',
-    'array_overload', 'array_rapid', 'array_bounce', 'array_pierce', 'array_big'
+    'array_overload', 'array_rapid', 'array_bounce', 'array_pierce', 'array_big', 'array_cascade',
+    'wordart_afterimage', 'comment_saturation'
   ] as SpecificUpgrade[];
   
   const formSpecific = allSpecific.filter(u => u.startsWith(form));
   const availableSpecific = formSpecific.filter(u => !player.specificUpgrades.includes(u));
 
-  const allGeneral = ['bold', 'underline', 'highlight', 'rand', 'vlookup', 'sum', 'italic', 'strikethrough', 'ctrl_c', 'ctrl_z', 'format_painter'] as GeneralUpgrade[];
+  const allGeneral = ['bold', 'underline', 'highlight', 'rand', 'vlookup', 'sum', 'italic', 'strikethrough', 'ctrl_c', 'ctrl_z', 'format_painter', 'conditional_format', 'data_validation', 'auto_fill'] as GeneralUpgrade[];
   let availableGeneral = allGeneral.filter(u => !player.generalUpgrades.includes(u));
   if (form === 'sparkline') {
     availableGeneral = availableGeneral.filter(u => u !== 'format_painter');
@@ -323,6 +324,7 @@ export default function App() {
           // Auto-advance if no upgrades left
           room.stage++;
           room.stageTimer = 0;
+          Object.values(room.players).forEach((pl: any) => { pl.sumStacks = 0; pl.sumKills = 0; });
           room.bossSpawned = false;
           if (room.stage <= 15) {
             room.enemies = []; 
@@ -641,7 +643,7 @@ export default function App() {
             eliteDamageMult = 1.15;
           }
           if (general.includes('sum')) {
-            const sumBonus = Math.min(0.24, (p.sumKills || 0) * 0.03);
+            const sumBonus = Math.min(0.24, (p.sumStacks || 0) * 0.03);
             damageMult *= (1 + sumBonus);
           }
 
@@ -667,7 +669,10 @@ export default function App() {
                 isHighlight: general.includes('highlight'),
                 leavesResidue: general.includes('underline'),
                 isItalic: general.includes('italic'),
-                isStrikethrough: general.includes('strikethrough')
+                isStrikethrough: general.includes('strikethrough'),
+                momentumBonus: 0,
+                distancePushed: 0,
+                leavesAfterimage: specific.includes('wordart_afterimage')
               });
             }
           };
@@ -676,14 +681,13 @@ export default function App() {
             fireRate = 1200;
             damage = 15;
             bulletSpeed = 6; // Slower, steady push
-            size = 60; // Base size
+            size = 120; // Base size
             pierce = 999; // Infinite pierce
             knockback = 0; // Handled by bulldozer logic
             duration = 3000; // Increased range
 
             if (general.includes('italic')) {
               fireRate *= 0.9;
-              bulletSpeed *= 1.15;
             }
 
             if (specific.includes('wordart_size')) {
@@ -694,7 +698,7 @@ export default function App() {
               bulletSpeed *= 1.5;
               damageMult *= 1.2;
             }
-            if (specific.includes('wordart_fast_push')) {
+            if (specific.includes('wordart_momentum')) {
               bulletSpeed *= 1.5;
             }
             if (specific.includes('wordart_shield')) {
@@ -752,7 +756,10 @@ export default function App() {
                 isHighlight: general.includes('highlight'),
                 leavesResidue: general.includes('underline'),
                 isItalic: general.includes('italic'),
-                isStrikethrough: general.includes('strikethrough')
+                isStrikethrough: general.includes('strikethrough'),
+                momentumBonus: 0,
+                distancePushed: 0,
+                leavesAfterimage: specific.includes('wordart_afterimage')
               } as Bullet);
               
               fireCtrlC(finalDamage);
@@ -802,17 +809,21 @@ export default function App() {
                   damage: finalDamage * dmgMult,
                   width: width + extraWidth,
                   range: range,
-                  life: 15,
-                  maxLife: 15,
+                  life: 10,
+                  maxLife: 10,
                   type: 'sparkline',
                   isCrit: isCrit,
                   eliteDamageMult: eliteDamageMult,
                   isSlow: isSlow,
-                  bouncesLeft: specific.includes('sparkline_bounce') ? 3 : (specific.includes('sparkline_reflect') ? 1 : 0),
+                  enemyBouncesLeft: specific.includes('sparkline_bounce') ? 3 : 0,
+                  wallBouncesLeft: specific.includes('sparkline_reflect') ? 1 : 0,
                   isHighlight: general.includes('highlight'),
                   leavesResidue: general.includes('underline'),
                   isItalic: general.includes('italic'),
                   isStrikethrough: general.includes('strikethrough'),
+                momentumBonus: 0,
+                distancePushed: 0,
+                leavesAfterimage: specific.includes('wordart_afterimage'),
                   stunChance: specific.includes('sparkline_freeze') ? 0.05 : 0
                 } as Laser);
               };
@@ -898,7 +909,10 @@ export default function App() {
                   isHighlight: general.includes('highlight'),
                   leavesResidue: general.includes('underline') || specific.includes('comment_black'),
                   isItalic: general.includes('italic'),
-                  isStrikethrough: general.includes('strikethrough')
+                  isStrikethrough: general.includes('strikethrough'),
+                momentumBonus: 0,
+                distancePushed: 0,
+                leavesAfterimage: specific.includes('wordart_afterimage')
                 } as Bullet);
               }
               
@@ -921,7 +935,7 @@ export default function App() {
               count += 2;
               spreadAngle += 6 * Math.PI / 180;
             }
-            if (specific.includes('array_plus_2')) {
+            if (false) {
               count += 2;
               spreadAngle += 6 * Math.PI / 180;
             }
@@ -976,7 +990,10 @@ export default function App() {
                   isHighlight: general.includes('highlight'),
                   leavesResidue: general.includes('underline'),
                   isItalic: general.includes('italic'),
-                  isStrikethrough: general.includes('strikethrough')
+                  isStrikethrough: general.includes('strikethrough'),
+                momentumBonus: 0,
+                distancePushed: 0,
+                leavesAfterimage: specific.includes('wordart_afterimage')
                 } as Bullet);
               }
               
@@ -1005,7 +1022,7 @@ export default function App() {
               maxLife: 2000,
               type: 'wordart',
               isCrit: false,
-              knockback: (knockback || 0) + knockbackAdd,
+              knockback: (p.generalUpgrades.includes('bold') ? 6 : 0),
               isTitle: true,
               isBulldozer: true,
               isShield: p.specificUpgrades.includes('wordart_shield'),
@@ -1040,7 +1057,7 @@ export default function App() {
                 maxLife: 3000,
                 type: 'wordart',
                 isCrit: false,
-                knockback: (knockback || 0) + knockbackAdd,
+                knockback: (p.generalUpgrades.includes('bold') ? 6 : 0),
                 isTitle: true,
                 isBulldozer: true,
                 isShield: p.specificUpgrades.includes('wordart_shield'),
@@ -1073,7 +1090,8 @@ export default function App() {
               isCrit: true,
               eliteDamageMult: 1,
               isSlow: false,
-              bouncesLeft: 0,
+              enemyBouncesLeft: 0,
+              wallBouncesLeft: 0,
               isCannon: true,
               isHighlight: p.generalUpgrades.includes('highlight'),
               leavesResidue: p.generalUpgrades.includes('underline'),
@@ -1100,6 +1118,7 @@ export default function App() {
               maxLife: 3000,
               type: 'comment',
               isCrit: true,
+              knockback: (p.generalUpgrades.includes('bold') ? 6 : 0),
               explosionRadius: 400,
               isSuper: true,
               eliteDamageMult: 1.5,
@@ -1131,6 +1150,7 @@ export default function App() {
                 maxLife: 1500,
                 type: 'array',
                 isCrit: false,
+                knockback: (p.generalUpgrades.includes('bold') ? 6 : 0),
                 eliteDamageMult: 1,
                 splitsLeft: 0,
                 trackRadius: 160,
@@ -1146,6 +1166,7 @@ export default function App() {
 
       for (let i = room.enemies.length - 1; i >= 0; i--) {
         const e = room.enemies[i];
+        if (e.validationMark && (Date.now() - e.validationMark) > 4000) delete e.validationMark;
         
         if (e.state === 'stunned') {
           e.stateTimer = (e.stateTimer || 0) - timeSpeed;
@@ -1545,12 +1566,8 @@ export default function App() {
               killer.sumKills = (killer.sumKills || 0) + 1;
               if (killer.sumKills >= 10) {
                 killer.sumKills = 0;
-                killer.sumStacks = (killer.sumStacks || 0) + 1;
+                killer.sumStacks = Math.min(8, (killer.sumStacks || 0) + 1);
                 
-                const overflow = Math.max(0, killer.sumStacks - 20);
-                killer.knockbackMult = 1 + Math.sqrt(overflow) * 0.1;
-                killer.sizeMult = 1 + Math.sqrt(overflow) * 0.05;
-                killer.eliteDamageMult = 1 + Math.sqrt(overflow) * 0.1;
               }
             }
           }
@@ -1622,7 +1639,7 @@ export default function App() {
         }
       }
 
-      const arrayHitsThisFrame = new Map<number, number>();
+      const arrayHitsThisFrame = new Map<number, { totalDmg: number; count: number; x: number; y: number; owner: string }>();
 
       for (let i = room.bullets.length - 1; i >= 0; i--) {
         const b = room.bullets[i];
@@ -1651,20 +1668,24 @@ export default function App() {
         b.y += b.vy * timeSpeed;
         b.life -= timeSpeed;
 
-        if (b.type === 'wordart') {
-          const ownerPlayer = room.players[b.owner];
-          if (ownerPlayer && ownerPlayer.specificUpgrades.includes('wordart_afterimage')) {
-            if (Math.random() < 0.2) {
-              room.puddles.push({
-                id: room.puddleIdCounter++,
-                x: b.x, y: b.y,
-                radius: b.size * 0.8,
-                type: 'vulnerable',
-                life: 72, // 1.2 seconds
-                maxLife: 72,
-                owner: b.owner
-              });
-            }
+        if (b.type === 'wordart' && b.leavesAfterimage) {
+          const prevX = b.x - b.vx * timeSpeed;
+          const prevY = b.y - b.vy * timeSpeed;
+          const segDist = Math.hypot(b.x - prevX, b.y - prevY);
+          const steps = Math.max(1, Math.floor(segDist / 40));
+          for (let step = 0; step <= steps; step++) {
+            const t = steps === 0 ? 1 : step / steps;
+            room.puddles.push({
+              id: room.puddleIdCounter++,
+              x: prevX + (b.x - prevX) * t,
+              y: prevY + (b.y - prevY) * t,
+              radius: 30,
+              type: 'afterimage',
+              life: 72,
+              maxLife: 72,
+              damageMult: 1.35,
+              owner: b.owner
+            });
           }
         }
 
@@ -1677,6 +1698,25 @@ export default function App() {
                   finalDamage *= (b.eliteDamageMult || 1);
                 }
                 
+                const ownerPlayer = room.players[b.owner];
+                const inAfterimage = room.puddles.some(p => p.type === 'afterimage' && Math.hypot(e.x - p.x, e.y - p.y) < p.radius + e.width/2);
+                if (inAfterimage) finalDamage *= 1.35;
+                if (ownerPlayer && ownerPlayer.generalUpgrades.includes('conditional_format') && e.hp / e.maxHp < 0.3) finalDamage *= 1.6;
+                if (ownerPlayer && ownerPlayer.generalUpgrades.includes('data_validation')) {
+                  if (e.validationMark && (Date.now() - e.validationMark) <= 4000) {
+                    finalDamage *= 2;
+                    delete e.validationMark;
+                  } else if (!e.validationMark) {
+                    e.validationMark = Date.now();
+                  }
+                }
+                if (ownerPlayer && ownerPlayer.specificUpgrades.includes('comment_saturation')) {
+                  room.recentExplosions = room.recentExplosions.filter(ex => Date.now() - ex.time <= 1000);
+                  const nearby = room.recentExplosions.filter(ex => Math.hypot(ex.x - b.x, ex.y - b.y) < 200).length;
+                  if (nearby >= 1) finalDamage *= (1 + nearby * 0.4);
+                  room.recentExplosions.push({ x: b.x, y: b.y, time: Date.now() });
+                }
+
                 if (b.isSuper && e.type !== 'EliteBoss' && e.type !== 'MiniBoss') {
                   e.hp = 0;
                 } else {
@@ -1687,7 +1727,8 @@ export default function App() {
                 const angle = Math.atan2(e.y - b.y, e.x - b.x);
                 let kbResist = e.isBuffed ? 0.2 : 0.8;
                 kbResist /= (e.weight || 1);
-                const kbForce = 15 * (b.knockbackMult || 1);
+                const playerKbMult = room.players[b.owner]?.knockbackMult || 1;
+                const kbForce = 15 * (b.knockbackMult || 1) * playerKbMult;
                 e.vx += Math.cos(angle) * kbForce * kbResist;
                 e.vy += Math.sin(angle) * kbForce * kbResist;
                 
@@ -1777,9 +1818,8 @@ export default function App() {
           if (!b.isBulldozer && b.hitTargets && b.hitTargets.has(e.id)) continue;
 
           let isHit = false;
-          if (b.type === 'wordart' && b.width && b.height) {
-            // WordArt is always horizontal now, so simple AABB collision
-            if (Math.abs(b.x - e.x) < b.width/2 + e.width/2 && Math.abs(b.y - e.y) < b.height/2 + e.height/2) {
+          if (b.type === 'wordart' && b.size) {
+            if (Math.abs(b.x - e.x) < b.size/2 + e.width/2 && Math.abs(b.y - e.y) < b.size/2 + e.height/2) {
               isHit = true;
             }
           } else if (b.width && b.height && b.angle !== undefined) {
@@ -1816,6 +1856,7 @@ export default function App() {
             b.hitTargets.add(e.id);
 
             if (firstHit) {
+              const ownerPlayer = room.players[b.owner];
               let finalDamage = b.damage;
               
               if (e.type === 'ProtectedView' && e.facingAngle !== undefined) {
@@ -1836,9 +1877,48 @@ export default function App() {
               if (inHighlight) {
                 finalDamage *= 1.5;
               }
+              const inAfterimage = room.puddles.some(p => p.type === 'afterimage' && Math.hypot(e.x - p.x, e.y - p.y) < p.radius + e.width/2);
+              if (inAfterimage) finalDamage *= 1.35;
+              if (ownerPlayer && ownerPlayer.generalUpgrades.includes('conditional_format') && e.hp / e.maxHp < 0.3) finalDamage *= 1.6;
+              if (ownerPlayer && ownerPlayer.generalUpgrades.includes('data_validation')) {
+                if (e.validationMark && (Date.now() - e.validationMark) <= 4000) {
+                  finalDamage *= 2;
+                  delete e.validationMark;
+                } else if (!e.validationMark) {
+                  e.validationMark = Date.now();
+                }
+              }
+              if (ownerPlayer && ownerPlayer.specificUpgrades.includes('wordart_momentum') && b.type === 'wordart') {
+                const momentumTier = Math.min(4, Math.floor((b.distancePushed || 0) / 100));
+                finalDamage *= (1 + momentumTier * 0.15);
+              }
 
               e.hp -= finalDamage;
-              
+
+              if (e.hp <= 0 && ownerPlayer) {
+                if (b.type === 'array' && !b.isCascade && ownerPlayer.specificUpgrades.includes('array_cascade')) {
+                  room.bullets.push({
+                    ...b,
+                    id: room.bulletIdCounter++,
+                    x: e.x,
+                    y: e.y,
+                    isCascade: true,
+                    hitTargets: new Set()
+                  });
+                }
+                if (!b.isAutoFill && ownerPlayer.generalUpgrades.includes('auto_fill') && Math.random() < 0.3) {
+                  room.bullets.push({
+                    ...b,
+                    id: room.bulletIdCounter++,
+                    x: e.x,
+                    y: e.y,
+                    isAutoFill: true,
+                    isCascade: false,
+                    hitTargets: new Set()
+                  });
+                }
+              }
+
               if (b.isStrikethrough && e.hp > 0 && e.hp / e.maxHp <= 0.2 && e.type !== 'EliteBoss' && e.type !== 'MiniBoss') {
                 e.hp = 0;
                 const deathTexts = ['DELETE', 'KILL', 'GG.EXE'];
@@ -1876,7 +1956,6 @@ export default function App() {
                   id: room.puddleIdCounter++, x: e.x, y: e.y, radius: 80, type: 'highlight', life: 180, maxLife: 180, damage: b.damage * 0.3, owner: b.owner
                 });
               }
-              const ownerPlayer = room.players[b.owner];
               if (ownerPlayer && ownerPlayer.generalUpgrades.includes('format_painter') && Math.random() < 0.2) {
                 room.puddles.push({
                   id: room.puddleIdCounter++, x: e.x, y: e.y, radius: 60, type: 'formatPaint', life: 200, maxLife: 200, damage: b.damage * 0.2, owner: b.owner
@@ -1884,23 +1963,17 @@ export default function App() {
               }
 
               if (b.type === 'array' && ownerPlayer && ownerPlayer.specificUpgrades.includes('array_overload')) {
-                const hits = (arrayHitsThisFrame.get(e.id) || 0) + 1;
-                arrayHitsThisFrame.set(e.id, hits);
-                if (hits === 3) {
-                  room.puddles.push({
-                    id: room.puddleIdCounter++, x: e.x, y: e.y, radius: 100, type: 'explosion', life: 30, maxLife: 30, damage: b.damage * 2, owner: b.owner
-                  });
-                  // Apply explosion damage immediately
-                  for (const target of room.enemies) {
-                    if (target.hp > 0 && Math.hypot(target.x - e.x, target.y - e.y) < 100 + target.width/2) {
-                      target.hp -= b.damage * 2;
-                    }
-                  }
-                }
+                const entry = arrayHitsThisFrame.get(e.id) || { totalDmg: 0, count: 0, x: e.x, y: e.y, owner: b.owner };
+                entry.totalDmg += finalDamage;
+                entry.count += 1;
+                entry.x = e.x;
+                entry.y = e.y;
+                entry.owner = b.owner;
+                arrayHitsThisFrame.set(e.id, entry);
               }
             }
 
-            if (b.isBulldozer && e.type !== 'EliteBoss' && e.type !== 'MiniBoss') {
+            if (b.isBulldozer) {
               const prevX = e.x;
               const prevY = e.y;
               
@@ -1925,19 +1998,8 @@ export default function App() {
                 const dist = Math.hypot(e.x - prevX, e.y - prevY);
                 e.pushedDistance = (e.pushedDistance || 0) + dist;
                 
-                if (e.pushedDistance >= 100 && (e.pushDamageCount || 0) < 4) {
-                  e.pushedDistance -= 100;
-                  e.pushDamageCount = (e.pushDamageCount || 0) + 1;
-                  const extraDamage = b.damage * 0.15;
-                  e.hp -= extraDamage;
-                  
-                  const hex = Math.floor(extraDamage).toString(16).toUpperCase();
-                  particles.current.push({
-                    x: e.x + (Math.random()-0.5)*30, y: e.y + (Math.random()-0.5)*30,
-                    vx: (Math.random()-0.5)*6, vy: (Math.random()-0.5)*6 - 2,
-                    life: 30 + Math.random()*20, text: `+0x${hex}`, color: '#ff8800'
-                  });
-                }
+                b.distancePushed = (b.distancePushed || 0) + dist;
+
               }
               
               let atWall = false;
@@ -1951,42 +2013,24 @@ export default function App() {
 
               if (atWall) {
                 if (!e.crushCooldown || now > e.crushCooldown) {
-                  const isElite = e.type !== 'Minion' && e.type !== 'MINION';
-                  if (isElite) {
-                    if (!e.crushCount) {
-                      e.crushCount = 1;
-                      e.crushCooldown = now + 1000; // 1 second cooldown
-                      e.hp -= e.maxHp * 0.5; // Deal 50% damage
-                      shake.current = Math.max(shake.current, 5);
-                      particles.current.push({
-                        x: e.x, y: e.y,
-                        vx: 0, vy: -2,
-                        life: 30, color: '#ffaa00', text: 'CRUSH 1/2!'
-                      });
-                    } else {
-                      e.hp = 0;
-                      shake.current = Math.max(shake.current, 10);
-                      const deathTexts = ['DELETE', 'KILL', 'GG.EXE'];
-                      for(let i=0; i<5; i++) {
-                        particles.current.push({
-                          x: e.x, y: e.y,
-                          vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10,
-                          life: 30, color: '#ff0000', text: deathTexts[Math.floor(Math.random() * deathTexts.length)]
-                        });
-                      }
-                    }
+                  e.crushCooldown = now + 700;
+                  let wallDamage = 0;
+                  if (e.type === 'EliteBoss') {
+                    wallDamage = e.maxHp * 0.2;
+                  } else if (e.type === 'MiniBoss') {
+                    wallDamage = e.maxHp / 3;
                   } else {
-                    e.hp = 0;
-                    shake.current = Math.max(shake.current, 10);
-                    const deathTexts = ['DELETE', 'KILL', 'GG.EXE'];
-                    for(let i=0; i<5; i++) {
-                      particles.current.push({
-                        x: e.x, y: e.y,
-                        vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10,
-                        life: 30, color: '#ff0000', text: deathTexts[Math.floor(Math.random() * deathTexts.length)]
-                      });
-                    }
+                    wallDamage = e.maxHp;
                   }
+                  e.hp -= wallDamage;
+                  shake.current = Math.max(shake.current, e.type === 'EliteBoss' ? 8 : 10);
+                  particles.current.push({
+                    x: e.x, y: e.y,
+                    vx: 0, vy: -2,
+                    life: 30,
+                    color: '#111111',
+                    text: e.type === 'EliteBoss' ? 'WALL -20%' : (e.type === 'MiniBoss' ? 'WALL -33%' : 'CRUSH!')
+                  });
                 }
               }
             } else if (firstHit) {
@@ -2071,6 +2115,16 @@ export default function App() {
         }
       }
 
+      arrayHitsThisFrame.forEach((entry) => {
+        if (entry.count >= 3) {
+          const blastDamage = entry.totalDmg * 0.4;
+          room.puddles.push({ id: room.puddleIdCounter++, x: entry.x, y: entry.y, radius: 60, type: 'explosion', life: 30, maxLife: 30, damage: 0, owner: entry.owner });
+          for (const target of room.enemies) {
+            if (target.hp > 0 && Math.hypot(target.x - entry.x, target.y - entry.y) < 60 + target.width / 2) target.hp -= blastDamage;
+          }
+        }
+      });
+
       for (let i = room.enemyBullets.length - 1; i >= 0; i--) {
         const eb = room.enemyBullets[i];
         eb.x += eb.vx * timeSpeed;
@@ -2127,7 +2181,12 @@ export default function App() {
         if ((p.type === 'highlight' || p.type === 'formatPaint' || p.type === 'burn_slow') && room.stageTimer % 10 === 0) {
           room.enemies.forEach(e => {
             if (Math.hypot(e.x - p.x, e.y - p.y) < p.radius + e.width/2) {
-              e.hp -= p.damage || 0;
+              let pdmg = p.damage || 0;
+              const ownerPlayer = p.owner ? room.players[p.owner] : undefined;
+              const inAfterimage = room.puddles.some(ap => ap.type === 'afterimage' && Math.hypot(e.x - ap.x, e.y - ap.y) < ap.radius + e.width/2);
+              if (inAfterimage) pdmg *= 1.35;
+              if (ownerPlayer && ownerPlayer.generalUpgrades.includes('conditional_format') && e.hp / e.maxHp < 0.3) pdmg *= 1.6;
+              e.hp -= pdmg;
             }
           });
         }
@@ -2176,6 +2235,7 @@ export default function App() {
           if (dist < l.range && Math.abs(angleDiff) < 0.1) {
             l.hitTargets.add(e.id);
             
+            const ownerPlayer = room.players[l.owner];
             let finalDamage = l.damage;
             if (e.type === 'EliteBoss' || e.type === 'MiniBoss' || e.type === 'Elite') {
               finalDamage *= (l.eliteDamageMult || 1);
@@ -2183,10 +2243,21 @@ export default function App() {
             
             // Highlight vulnerability
             const inHighlight = room.puddles.some(p => p.type === 'highlight' && Math.hypot(e.x - p.x, e.y - p.y) < p.radius + e.width/2);
-            if (inHighlight) {
-              finalDamage *= 1.5;
+            if (inHighlight) finalDamage *= 1.5;
+            const inAfterimage = room.puddles.some(p => p.type === 'afterimage' && Math.hypot(e.x - p.x, e.y - p.y) < p.radius + e.width/2);
+            if (inAfterimage) finalDamage *= 1.35;
+            if (ownerPlayer && ownerPlayer.generalUpgrades.includes('conditional_format') && e.hp / e.maxHp < 0.3) finalDamage *= 1.6;
+            if (ownerPlayer && ownerPlayer.generalUpgrades.includes('data_validation')) {
+              if (e.validationMark && (Date.now() - e.validationMark) <= 4000) {
+                finalDamage *= 2;
+                delete e.validationMark;
+              } else if (!e.validationMark) {
+                e.validationMark = Date.now();
+              }
             }
-            
+            if (ownerPlayer && ownerPlayer.specificUpgrades.includes('sparkline_resonance') && (e as any).isSlowed) finalDamage *= 1.8;
+            if (ownerPlayer && ownerPlayer.specificUpgrades.includes('sparkline_execute') && e.hp / e.maxHp < 0.25 && e.type !== 'EliteBoss' && e.type !== 'MiniBoss') finalDamage *= 3;
+
             e.hp -= finalDamage;
             
             // Strikethrough execute
@@ -2210,6 +2281,7 @@ export default function App() {
             if ((l as any).isSlow) {
               e.vx *= 0.2;
               e.vy *= 0.2;
+              (e as any).isSlowed = true;
             }
             
             shake.current = Math.max(shake.current, 1);
@@ -2224,15 +2296,14 @@ export default function App() {
             });
             
             // Format Painter
-            const ownerPlayer = room.players[l.owner];
             if (ownerPlayer && ownerPlayer.generalUpgrades.includes('format_painter') && Math.random() < 0.2) {
               room.puddles.push({
                 id: room.puddleIdCounter++, x: e.x, y: e.y, radius: 60, type: 'formatPaint', life: 200, maxLife: 200, damage: l.damage * 0.2, owner: l.owner
               });
             }
             
-            if (!l.hasHit && l.bouncesLeft && l.bouncesLeft > 0) {
-              l.bouncesLeft--;
+            if (!l.hasHit && l.enemyBouncesLeft && l.enemyBouncesLeft > 0) {
+              l.enemyBouncesLeft--;
               l.hasHit = true;
               let nearestE = null;
               let minDist = 300;
@@ -2252,12 +2323,13 @@ export default function App() {
                   damage: l.damage * 0.5,
                   width: l.width,
                   range: 3000,
-                  life: 15,
-                  maxLife: 15,
+                  life: 10,
+                  maxLife: 10,
                   type: 'sparkline',
                   isCrit: l.isCrit,
                   eliteDamageMult: l.eliteDamageMult,
-                  bouncesLeft: l.bouncesLeft,
+                  enemyBouncesLeft: l.enemyBouncesLeft,
+                  wallBouncesLeft: l.wallBouncesLeft,
                   isSlow: (l as any).isSlow
                 } as Laser);
               }
@@ -2265,6 +2337,15 @@ export default function App() {
           }
         }
         
+        if (l.wallBouncesLeft && l.wallBouncesLeft > 0) {
+          const endX = l.x + Math.cos(l.angle) * l.range;
+          const endY = l.y + Math.sin(l.angle) * l.range;
+          if (checkObstacleCollision(endX, endY, 4, 4)) {
+            l.wallBouncesLeft--;
+            l.angle = Math.PI - l.angle;
+            l.hasHit = false;
+          }
+        }
         if (l.life <= 0) {
           room.lasers.splice(i, 1);
         }
@@ -2344,7 +2425,7 @@ export default function App() {
     
     const p = room.players[myId];
     if (p) {
-      if (['bold', 'underline', 'highlight', 'rand', 'vlookup', 'sum', 'italic', 'strikethrough', 'ctrl_c', 'ctrl_z', 'format_painter'].includes(upgrade)) {
+      if (['bold', 'underline', 'highlight', 'rand', 'vlookup', 'sum', 'italic', 'strikethrough', 'ctrl_c', 'ctrl_z', 'format_painter', 'conditional_format', 'data_validation', 'auto_fill'].includes(upgrade)) {
         if (!p.generalUpgrades.includes(upgrade as GeneralUpgrade)) {
           p.generalUpgrades.push(upgrade as GeneralUpgrade);
         }
@@ -2367,6 +2448,7 @@ export default function App() {
     room.isSelectingSkill = false;
     room.stage++;
     room.stageTimer = 0;
+    Object.values(room.players).forEach((pl: any) => { pl.sumStacks = 0; pl.sumKills = 0; });
     room.bossSpawned = false;
     
     if (room.stage <= 15) {
@@ -2966,50 +3048,45 @@ export default function App() {
           ctx.save();
           ctx.translate(b.x, b.y);
           ctx.rotate(b.angle || 0);
-          
-          if (b.isTitle) {
-            // 巨型大标题清场特效
-            const scale = 1 + Math.sin(now * 0.01) * 0.1;
-            ctx.scale(scale, scale);
-            ctx.font = cnFont(48);
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            
-            // 红色渐变
-            const grad = ctx.createLinearGradient(0, -24, 0, 24);
-            grad.addColorStop(0, '#ff4d4f');
-            grad.addColorStop(1, '#cf1322');
-            
-            ctx.shadowColor = 'rgba(207,19,34,0.8)';
-            ctx.shadowBlur = 15;
-            ctx.fillStyle = grad;
-            ctx.fillText(b.text || '清场', 0, 0);
-            
-            ctx.shadowBlur = 0;
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = '#ffffff';
-            ctx.strokeText(b.text || '清场', 0, 0);
-          } else {
-            // 普通 WordArt 子弹：绿色填充，前端白色发光
-            ctx.font = boldCode(14);
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            
-            ctx.shadowColor = '#2ea043';
-            ctx.shadowBlur = 8;
-            ctx.fillStyle = '#2ea043';
-            
-            // 动态字符
-            const chars = ['0','1','A','B','C','D','E','F'];
-            const char = chars[Math.floor(now/100 + b.id) % chars.length];
-            ctx.fillText(char, 0, 0);
-            
-            // 扫描线特效
-            ctx.fillStyle = 'rgba(46,160,67,0.3)';
-            ctx.fillRect(-8, -8 + (now/20)%16, 16, 2);
+
+          const wallW = Math.max(140, b.width || b.size * 2.6 || 180);
+          const wallH = Math.max(56, b.height || b.size * 0.95 || 64);
+
+          const bodyGrad = ctx.createLinearGradient(-wallW/2, 0, wallW/2, 0);
+          bodyGrad.addColorStop(0, '#050505');
+          bodyGrad.addColorStop(0.6, '#121212');
+          bodyGrad.addColorStop(1, '#1f1f1f');
+          ctx.fillStyle = bodyGrad;
+          ctx.fillRect(-wallW/2, -wallH/2, wallW, wallH);
+
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = '#2b2b2b';
+          ctx.strokeRect(-wallW/2, -wallH/2, wallW, wallH);
+
+          const frontGlow = ctx.createLinearGradient(wallW * 0.15, 0, wallW/2 + 20, 0);
+          frontGlow.addColorStop(0, 'rgba(120,120,120,0.0)');
+          frontGlow.addColorStop(1, 'rgba(220,220,220,0.35)');
+          ctx.fillStyle = frontGlow;
+          ctx.fillRect(-wallW/2, -wallH/2, wallW + 22, wallH);
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(-wallW/2 + 6, -wallH/2 + 6, wallW - 12, wallH - 12);
+          ctx.clip();
+          ctx.font = codeFont(Math.max(10, Math.min(14, wallH * 0.18)));
+          ctx.textBaseline = 'middle';
+          const codeRow = 'if(x){return 0;} const err = null; // #### ';
+          const flow = ((Date.now() * 0.22) % 80);
+          for (let row = 0; row < 4; row++) {
+            const y = -wallH/2 + 14 + row * (wallH - 24) / 3;
+            ctx.fillStyle = row % 2 === 0 ? 'rgba(170,170,170,0.26)' : 'rgba(110,110,110,0.24)';
+            ctx.fillText(codeRow.repeat(4), -wallW/2 - flow, y);
           }
           ctx.restore();
 
+          ctx.fillStyle = 'rgba(255,255,255,0.12)';
+          ctx.fillRect(wallW/2 - 10, -wallH/2, 10, wallH);
+          ctx.restore();
         } else if (b.type === 'array') {
           ctx.save();
           ctx.translate(b.x, b.y);
@@ -3125,40 +3202,34 @@ export default function App() {
         ctx.translate(l.x, l.y);
         ctx.rotate(l.angle);
         const now = Date.now();
-        
+
         if (l.type === 'sparkline') {
-          const isCannon = l.isCannon;
           const alpha = Math.max(0, l.life / l.maxLife);
-          
-          if (isCannon) {
-            // 巨型激光：大号重复字符
+          const progress = 1 - alpha;
+
+          if (l.isCannon) {
             ctx.shadowColor = `rgba(0,0,0,${alpha})`;
-            ctx.shadowBlur = 15;
-            ctx.fillStyle = `rgba(50,50,50,${alpha})`;
-            ctx.font = boldCode(36);
-            const charCount = Math.floor(l.range / 20);
-            for (let i = 0; i < charCount; i++) {
-              const dist = i * 20;
-              const char = '01NaNnull{}[]()=>undefinedvoid0xFFerr%$#@!'[(Math.floor(now/50)+i)%42];
-              const yOffset = Math.sin(dist*0.05 + now*0.01) * 15;
-              for (let w = -2; w <= 2; w++) {
-                ctx.fillText(char, dist, yOffset + w * 25);
-              }
+            ctx.shadowBlur = 12;
+            ctx.font = boldCode(30 + Math.floor((1 - alpha) * 10));
+            const head = progress * l.range;
+            const length = Math.min(l.range, 900);
+            for (let dist = Math.max(0, head - length); dist < head; dist += 16) {
+              const fade = 1 - (head - dist) / length;
+              ctx.fillStyle = `rgba(30,30,30,${0.9 * fade * alpha})`;
+              const char = '01NaNnull{}[]()=>undefinedvoid0xFFerr%$#@!'[(Math.floor(dist / 12) + Math.floor(now / 40)) % 42];
+              for (let w = -3; w <= 3; w++) ctx.fillText(char, dist, w * 18);
             }
           } else {
-            // 普通激光：字符流
-            ctx.font = codeFont(14);
-            const charCount = Math.floor(l.range / 10);
-            for (let i = 0; i < charCount; i++) {
-              const dist = i * 10;
-              const char = '01NaNnull{}[]()=>undefinedvoid0xFFerr%$#@!'[(Math.floor(now/50)+i)%42];
-              const yOffset = Math.sin(dist*0.1 + now*0.01) * 5;
-              const fade = 1 - (dist / l.range);
-              ctx.fillStyle = `rgba(30,30,30,${alpha * fade})`;
-              
-              const widthMultiplier = l.width > 20 ? 3 : 1;
-              for (let w = -widthMultiplier; w <= widthMultiplier; w++) {
-                ctx.fillText(char, dist, yOffset + w * 12);
+            const head = progress * l.range;
+            const beamLen = Math.min(720, 240 + l.width * 14);
+            const thickness = Math.max(1, Math.floor((l.width / 8) * (1.3 - alpha * 0.5)));
+            ctx.font = codeFont(12 + Math.min(8, Math.floor(l.width / 4)));
+            for (let dist = Math.max(0, head - beamLen); dist < head; dist += 9) {
+              const fade = 1 - (head - dist) / beamLen;
+              const char = '01NaNnull{}[]()=>undefinedvoid0xFFerr%$#@!'[(Math.floor(dist / 8) + Math.floor(now / 55)) % 42];
+              ctx.fillStyle = `rgba(18,18,18,${alpha * fade})`;
+              for (let w = -thickness; w <= thickness; w++) {
+                ctx.fillText(char, dist, w * 10);
               }
             }
           }
