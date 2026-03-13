@@ -5,16 +5,12 @@ export type SpecificUpgrade =
   | 'sparkline_width' | 'sparkline_focus' | 'sparkline_bounce' | 'sparkline_rapid' | 'sparkline_ult'
   | 'comment_size' | 'comment_chain' | 'comment_residue' | 'comment_fast' | 'comment_ult'
   | 'array_count' | 'array_split' | 'array_track' | 'array_fast' | 'array_ult'
-  | 'wordart_wide' | 'wordart_fast_push' | 'wordart_shield' | 'wordart_stun' | 'wordart_quad' | 'wordart_pile_driver' | 'wordart_column_freeze'
-  | 'array_plus_2' | 'array_rapid' | 'array_bounce' | 'array_pierce' | 'array_big' | 'array_spreadsheet'
-  | 'sparkline_freeze' | 'sparkline_cannon' | 'sparkline_reflect' | 'sparkline_overclock' | 'sparkline_burn_stack' | 'sparkline_overload'
-  | 'comment_triple' | 'comment_knockback' | 'comment_split' | 'comment_black' | 'comment_super' | 'comment_gravity_well'
-  | 'wordart_all_caps' | 'wordart_hotkey' | 'wordart_typewriter' | 'wordart_revision' | 'wordart_subscript'
-  | 'sparkline_burn' | 'sparkline_killshot' | 'sparkline_execute' | 'sparkline_tenshot' | 'sparkline_charge'
-  | 'comment_density' | 'comment_mark' | 'comment_wallbounce' | 'comment_proximity' | 'comment_battery'
-  | 'array_ricochet' | 'array_converge' | 'array_single' | 'array_orbit' | 'array_scatter';
+  | 'wordart_wide' | 'wordart_momentum' | 'wordart_shield' | 'wordart_stun' | 'wordart_quad' | 'wordart_pile_driver' | 'wordart_column_freeze' | 'wordart_afterimage'
+  | 'array_overload' | 'array_rapid' | 'array_bounce' | 'array_pierce' | 'array_big' | 'array_spreadsheet' | 'array_cascade'
+  | 'sparkline_freeze' | 'sparkline_cannon' | 'sparkline_reflect' | 'sparkline_overclock' | 'sparkline_burn_stack' | 'sparkline_overload' | 'sparkline_resonance' | 'sparkline_execute'
+  | 'comment_triple' | 'comment_knockback' | 'comment_split' | 'comment_black' | 'comment_super' | 'comment_gravity_well' | 'comment_saturation';
 
-export type GeneralUpgrade = 'bold' | 'underline' | 'highlight' | 'rand' | 'vlookup' | 'sum' | 'italic' | 'strikethrough' | 'ctrl_c' | 'ctrl_z' | 'format_painter';
+export type GeneralUpgrade = 'bold' | 'underline' | 'highlight' | 'rand' | 'vlookup' | 'sum' | 'italic' | 'strikethrough' | 'ctrl_c' | 'ctrl_z' | 'format_painter' | 'conditional_format' | 'data_validation' | 'auto_fill';
 
 export type Upgrade = SpecificUpgrade | GeneralUpgrade;
 
@@ -54,44 +50,35 @@ export const UPGRADE_NAMES: Record<Upgrade, string> = {
   array_fast: '高速填充 (FastFill)',
   array_ult: 'RANDARRAY (终极)',
   wordart_wide: '啊啊啊啊啊',
-  wordart_fast_push: '推动加速',
+  wordart_momentum: '动量',
   wordart_shield: '文字护盾',
   wordart_stun: '震慑排版',
   wordart_quad: '四面大字',
-  array_plus_2: '弹道 +2',
+  wordart_pile_driver: '打桩机',
+  wordart_column_freeze: '列冻结',
+  wordart_afterimage: '残影',
+  array_overload: '过载',
   array_rapid: '高速填充',
   array_bounce: '墙体反弹',
   array_pierce: '无限穿透',
   array_big: '大号单元格',
+  array_spreadsheet: '电子表格',
+  array_cascade: '级联引用',
   sparkline_freeze: '冻结射线',
   sparkline_cannon: '激光炮',
   sparkline_reflect: '反射',
   sparkline_overclock: '超频',
+  sparkline_burn_stack: '灼烧叠加',
+  sparkline_overload: '过载',
+  sparkline_resonance: '共鸣',
+  sparkline_execute: '立即执行',
   comment_triple: '三连投',
   comment_knockback: '强力击飞',
   comment_split: '分裂炸弹',
   comment_black: '炸黑了',
   comment_super: '超级炸弹',
-  wordart_all_caps: '全大写',
-  wordart_hotkey: '快捷键',
-  wordart_typewriter: '打字机',
-  wordart_revision: '修订标记',
-  wordart_subscript: '下标',
-  sparkline_burn: '灼烧叠层',
-  sparkline_killshot: '击杀闪光',
-  sparkline_execute: '立即执行',
-  sparkline_tenshot: '十连',
-  sparkline_charge: '充能发射',
-  comment_density: '密度加成',
-  comment_mark: '未解决批注',
-  comment_wallbounce: '墙面反弹',
-  comment_proximity: '近爆引信',
-  comment_battery: '电池批注',
-  array_ricochet: '连续引用',
-  array_converge: '汇聚公式',
-  array_single: '单元格模式',
-  array_orbit: '轨道防御',
-  array_scatter: '扩散填充',
+  comment_gravity_well: '引力井',
+  comment_saturation: '饱和打击',
   bold: '加粗 (Bold)',
   italic: '斜体 (Italic)',
   underline: '下划线 (Underline)',
@@ -102,7 +89,10 @@ export const UPGRADE_NAMES: Record<Upgrade, string> = {
   sum: '=SUM() 求和',
   ctrl_c: 'Ctrl+C 复制',
   ctrl_z: 'Ctrl+Z 撤销',
-  format_painter: '格式刷 (Format Painter)'
+  format_painter: '格式刷 (Format Painter)',
+  conditional_format: '条件格式 (Conditional Format)',
+  data_validation: '数据验证 (Data Validation)',
+  auto_fill: '自动填充 (Auto Fill)'
 };
 
 export const UPGRADE_DESCS: Record<Upgrade, string> = {
@@ -110,7 +100,7 @@ export const UPGRADE_DESCS: Record<Upgrade, string> = {
   wordart_weight: '大标题推进速度加快，推力更强',
   wordart_spread: '大标题命中敌人时，有概率向两侧发射小号文字',
   wordart_title: '每第3发变成超宽大标题，伤害2.5倍，无限穿透',
-  wordart_ult: '每5秒全屏发射巨型大标题清场，伤害150，对精英1.5倍伤害',
+  wordart_ult: '每20秒全屏发射巨型大标题清场，伤害150，对精英1.5倍伤害',
   sparkline_width: '激光加粗，伤害 +20%',
   sparkline_focus: '激光附带强力减速效果',
   sparkline_bounce: '激光命中第一个敌人时会折射出一条新的激光',
@@ -127,44 +117,35 @@ export const UPGRADE_DESCS: Record<Upgrade, string> = {
   array_fast: '冷却 -18%，飞行速度 +15%',
   array_ult: '每3秒向四周发射一圈子弹(16发)',
   wordart_wide: '【啊啊啊啊啊】推出去的文字横向变宽',
-  wordart_fast_push: '【推动加速】推着敌人往前走的速度更快',
+  wordart_momentum: '【动量】大字推着敌人移动时，每推行100px，该次攻击伤害+15%（上限+60%）',
   wordart_shield: '【文字护盾】大字可抵挡敌方子弹，射速-20%，移速额外-10%',
   wordart_stun: '【震慑排版】未击杀目标时50%概率眩晕1秒',
   wordart_quad: '【四面大字】每20秒向四个方向各发射一个大字',
-  array_plus_2: '【弹道 +2】子弹数量 +2',
+  wordart_pile_driver: '【打桩机】大字推到墙边时造成额外巨量伤害',
+  wordart_column_freeze: '【列冻结】大字推过的区域会暂时减速敌人',
+  wordart_afterimage: '【残影】大字飞过的路径留下持续1.2秒的易伤区域，区域内受到所有伤害+35%',
+  array_overload: '【过载】同一帧内命中同一个敌人的子弹≥3发时，触发小爆炸',
   array_rapid: '【高速填充】射速 x1.5',
   array_bounce: '【墙体反弹】子弹碰到墙壁可反弹1次',
   array_pierce: '【无限穿透】子弹获得无限穿透',
   array_big: '【大号单元格】子弹体积 x2',
+  array_spreadsheet: '【电子表格】子弹命中后有概率生成一个电子表格区域，持续伤害',
+  array_cascade: '【级联引用】子弹击杀敌人时，在击杀位置沿相同方向再射出一颗相同属性的子弹',
   sparkline_freeze: '【冻结射线】命中时5%概率冰冻敌人',
   sparkline_cannon: '【激光炮】每30秒发射极粗激光秒杀非BOSS，随后1.5秒无法发射普通激光',
   sparkline_reflect: '【反射】激光击中墙壁后反射1次',
   sparkline_overclock: '【超频】激光射速 x2',
+  sparkline_burn_stack: '【灼烧叠加】激光命中会叠加灼烧层数，造成持续伤害',
+  sparkline_overload: '【过载】激光伤害大幅提升，但会消耗自身少量生命值',
+  sparkline_resonance: '【共鸣】激光命中已处于减速状态的敌人时，伤害×1.8',
+  sparkline_execute: '【立即执行】激光对HP低于25%的非Boss敌人造成3倍伤害',
   comment_triple: '【三连投】一次扔出3颗炸弹，攻速降低20%',
   comment_knockback: '【强力击飞】炸弹击飞距离增加100%',
   comment_split: '【分裂炸弹】碰到敌人后分裂成3颗炸弹',
   comment_black: '【炸黑了】爆炸后把地面炸黑(视觉效果)',
   comment_super: '【超级炸弹】每30秒扔出巨大炸弹，秒杀普通/精英怪，并附加减速和灼烧',
-  wordart_all_caps: 'WordArt形态移速惩罚从-30%降为-10%',
-  wordart_hotkey: '压墙击杀后，下一发忽略冷却立即可发',
-  wordart_typewriter: '子弹从30%体积飞行中线性增长至200%，碰撞体积同步变化',
-  wordart_revision: '大字命中精英/Boss时施加"修订"标记5秒，标记期间该目标受所有伤害来源+35%',
-  wordart_subscript: '每次发射同时在玩家下方60px发射40%大小副弹（伤害40%，相同穿透），不消耗CD',
-  sparkline_burn: '激光持续命中同一目标叠灼烧（每秒+1层，最多8层，每层+5伤/秒），离开后每3秒-1层',
-  sparkline_killshot: '激光击杀敌人后300ms内，下一束激光伤害×3（触发即消耗）',
-  sparkline_execute: '激光对HP低于25%的非Boss敌人造成3倍伤害',
-  sparkline_tenshot: '每连续命中10次后，下次命中触发确定3倍暴击（非随机，触发即重置计数）',
-  sparkline_charge: '不射击时每秒积累1格充能（最多3格），射击时消耗全部，激光伤害×(1+格数×0.7)',
-  comment_density: '爆炸范围内每多1个敌人，所有命中者额外+15%伤害（最多+75%）',
-  comment_mark: '爆炸后范围内存活的敌人被标记4秒，受下次爆炸+80%伤害（消耗标记）',
-  comment_wallbounce: '炸弹碰到边界或障碍物时反弹一次继续飞行，不提前爆炸（限1次）',
-  comment_proximity: '炸弹飞行中任意敌人进入40px范围内立即触发爆炸',
-  comment_battery: '每次爆炸命中至少1个敌人，立即回复玩家2%最大HP',
-  array_ricochet: '每次击杀敌人：本次飞行速度+20%、穿透+1（各上限累计+3）',
-  array_converge: '所有子弹飞出300px后向发射中心线收拢，远处集中打同一目标',
-  array_single: '强制只发射1颗子弹，伤害=当前所有子弹总和×0.8，速度×1.5',
-  array_orbit: '玩家周围持续绕行8颗微型子弹，触碰敌人造成5伤害并推开',
-  array_scatter: '子弹命中敌人时，在命中点生成2颗随机方向弹片（伤害30%，无穿透）',
+  comment_gravity_well: '【引力井】爆炸中心会吸引周围的敌人',
+  comment_saturation: '【饱和打击】1秒内在同一200px范围内爆炸2颗及以上，每颗额外+40%伤害',
   bold: '直接伤害 +30%，击退 +6px',
   italic: '飞行速度 +15%，射速 +10%',
   underline: '攻击留下1.4秒拖尾/残痕，伤害7/s',
@@ -172,10 +153,13 @@ export const UPGRADE_DESCS: Record<Upgrade, string> = {
   highlight: '命中后生成50px高亮区，持续2.5秒，区域内敌人受到伤害增加50% (易伤)',
   rand: '15%概率暴击，暴击倍率2.4x',
   vlookup: '对精英/Boss伤害+15%，投射物获得轻度追踪，激光对目标有轻微吸附',
-  sum: '当前波次内：每击杀10个敌人，本波伤害+3%(上限+24%)，下波清零',
+  sum: '每10击杀+3%伤害，上限+24%(8层)，每个stage结束清零',
   ctrl_c: '每次攻击有20%概率额外发射一团乱码(多重射击)',
   ctrl_z: '受到致命伤时免死，恢复30%血量并无敌2秒 (每局限1次)',
-  format_painter: '击中敌人时，有20%概率在敌人脚下生成一个格式刷区域，减速并造成持续伤害'
+  format_painter: '击中敌人时，有20%概率在敌人脚下生成一个格式刷区域，减速并造成持续伤害',
+  conditional_format: '对HP低于30%的敌人，所有伤害来源+60%',
+  data_validation: '每个敌人首次被命中时获得"待验证"标记（持续4秒）。标记存在时，下一次命中该敌人+100%伤害并消耗标记。',
+  auto_fill: '击杀敌人时，30%概率在击杀位置免费发射一次当前武器攻击'
 };
 
 export interface Player {
@@ -214,12 +198,8 @@ export interface Player {
   ctrlZUsed?: boolean;
   gridToolCharges?: number;
   upgradesToChoose?: number;
-  laserCharge?: number;
-  lastChargeTime?: number;
-  lasersHit?: number;
-  nextLaserCrit?: boolean;
-  killshotUntil?: number;
-  orbitAngle?: number;
+  slowUntil?: number;
+  slowFactor?: number;
 }
 
 export interface AoeWarning {
@@ -260,10 +240,11 @@ export interface Enemy {
   isBuffed?: boolean;
   crushCooldown?: number;
   crushCount?: number;
-  burnStacks?: number;
-  annotateMark?: number;
-  commentMark?: number;
-  revisionMark?: number;
+  pushedDistance?: number;
+  pushDamageCount?: number;
+  lastPushedBy?: number; // Bullet ID
+  spawnedBy?: number;
+  validationMark?: number;
 }
 
 export interface EnemyBullet {
@@ -283,11 +264,12 @@ export interface Puddle {
   x: number;
   y: number;
   radius: number;
-  type: 'formatPaint' | 'freeze' | 'highlight' | 'explosion' | 'blacken' | 'burn_slow';
+  type: 'formatPaint' | 'freeze' | 'highlight' | 'explosion' | 'blacken' | 'burn_slow' | 'vulnerable';
   life: number;
   maxLife: number;
   damage?: number;
   owner?: string;
+  damageMult?: number;
 }
 
 export interface Bullet {
@@ -305,6 +287,7 @@ export interface Bullet {
   type: string;
   isCrit?: boolean;
   knockback?: number;
+  knockbackMult?: number;
   isTitle?: boolean;
   eliteDamageMult?: number;
   explosionRadius?: number;
@@ -326,15 +309,11 @@ export interface Bullet {
   isShield?: boolean;
   stunChance?: number;
   isSuper?: boolean;
-  typewriterScale?: number;
-  initialAngle?: number;
-  travelDist?: number;
-  ricochetSpeed?: number;
-  ricochetPierce?: number;
-  isOrbit?: boolean;
-  initialWidth?: number;
-  initialHeight?: number;
-  wallBounced?: boolean;
+  isCascade?: boolean;
+  isAutoFill?: boolean;
+  momentumBonus?: number;
+  distancePushed?: number;
+  leavesAfterimage?: boolean;
 }
 
 export interface Laser {
@@ -370,216 +349,261 @@ export interface MapDef {
 }
 
 export const MAPS: MapDef[] = [
+  // Map 1: 空旷训练场
   {
     width: 3000, height: 3000,
     obstacles: [
-      { x: 1000, y: 1000, w: 200, h: 200 },
-      { x: 1800, y: 1000, w: 200, h: 200 },
-      { x: 1000, y: 1800, w: 200, h: 200 },
-      { x: 1800, y: 1800, w: 200, h: 200 },
-    ],
-    bushes: [
-      { x: 1400, y: 1400, w: 200, h: 200 }
-    ],
-    spawners: [
-      { x: 200, y: 200 }, { x: 2800, y: 200 },
-      { x: 200, y: 2800 }, { x: 2800, y: 2800 },
-      { x: 1500, y: 200 }, { x: 1500, y: 2800 }
-    ],
-    playerSpawn: { x: 1500, y: 1500 }
-  },
-  {
-    width: 3000, height: 3000,
-    obstacles: [
-      { x: 0, y: 800, w: 1200, h: 200 },
-      { x: 1800, y: 800, w: 1200, h: 200 },
-      { x: 0, y: 2000, w: 1200, h: 200 },
-      { x: 1800, y: 2000, w: 1200, h: 200 },
-    ],
-    bushes: [
-      { x: 1300, y: 800, w: 400, h: 200 },
-      { x: 1300, y: 2000, w: 400, h: 200 }
-    ],
-    spawners: [
-      { x: 1500, y: 200 }, { x: 1500, y: 2800 },
-      { x: 200, y: 1400 }, { x: 2800, y: 1400 }
-    ],
-    playerSpawn: { x: 1500, y: 1500 }
-  },
-  {
-    width: 3000, height: 3000,
-    obstacles: [
-      { x: 800, y: 0, w: 200, h: 1200 },
-      { x: 800, y: 1800, w: 200, h: 1200 },
-      { x: 2000, y: 0, w: 200, h: 1200 },
-      { x: 2000, y: 1800, w: 200, h: 1200 },
+      { x: 200, y: 200, w: 200, h: 200 },
+      { x: 2600, y: 200, w: 200, h: 200 },
+      { x: 200, y: 2600, w: 200, h: 200 },
+      { x: 2600, y: 2600, w: 200, h: 200 },
     ],
     bushes: [],
     spawners: [
-      { x: 400, y: 1500 }, { x: 2600, y: 1500 },
-      { x: 1500, y: 200 }, { x: 1500, y: 2800 }
+      { x: 150, y: 150 }, { x: 2850, y: 150 }, { x: 150, y: 2850 }, { x: 2850, y: 2850 }
     ],
     playerSpawn: { x: 1500, y: 1500 }
   },
+  // Map 2: 十字走廊
   {
     width: 3000, height: 3000,
     obstacles: [
-      { x: 600, y: 600, w: 400, h: 400 }, { x: 2000, y: 600, w: 400, h: 400 },
-      { x: 600, y: 2000, w: 400, h: 400 }, { x: 2000, y: 2000, w: 400, h: 400 },
-      { x: 1300, y: 1300, w: 400, h: 400 }
-    ],
-    bushes: [
-      { x: 1000, y: 1000, w: 300, h: 300 }, { x: 1700, y: 1700, w: 300, h: 300 }
-    ],
-    spawners: [
-      { x: 1500, y: 200 }, { x: 1500, y: 2800 },
-      { x: 200, y: 1500 }, { x: 2800, y: 1500 },
-      { x: 200, y: 200 }, { x: 2800, y: 2800 }
-    ],
-    playerSpawn: { x: 1500, y: 1100 }
-  },
-  {
-    width: 3000, height: 3000,
-    obstacles: [
-      { x: 0, y: 0, w: 3000, h: 100 },
-      { x: 0, y: 2900, w: 3000, h: 100 },
-      { x: 0, y: 0, w: 100, h: 3000 },
-      { x: 2900, y: 0, w: 100, h: 3000 },
+      { x: 150, y: 150, w: 1050, h: 1050 },
+      { x: 1800, y: 150, w: 1050, h: 1050 },
+      { x: 150, y: 1800, w: 1050, h: 1050 },
+      { x: 1800, y: 1800, w: 1050, h: 1050 },
     ],
     bushes: [],
     spawners: [
-      { x: 300, y: 300 }, { x: 1500, y: 300 }, { x: 2700, y: 300 },
-      { x: 300, y: 1500 }, { x: 2700, y: 1500 },
-      { x: 300, y: 2700 }, { x: 1500, y: 2700 }, { x: 2700, y: 2700 }
+      { x: 1500, y: 150 }, { x: 1500, y: 2850 }, { x: 150, y: 1500 }, { x: 2850, y: 1500 }
     ],
     playerSpawn: { x: 1500, y: 1500 }
   },
-  {
-    width: 3000, height: 3000,
-    obstacles: [
-      { x: 500, y: 900, w: 2000, h: 120 },
-      { x: 500, y: 1980, w: 2000, h: 120 },
-      { x: 1450, y: 1020, w: 100, h: 960 }
-    ],
-    bushes: [{ x: 1380, y: 1400, w: 240, h: 200 }],
-    spawners: [{ x: 250, y: 250 }, { x: 2750, y: 250 }, { x: 250, y: 2750 }, { x: 2750, y: 2750 }],
-    playerSpawn: { x: 1500, y: 1500 }
-  },
-  {
-    width: 3000, height: 3000,
-    obstacles: [
-      { x: 700, y: 700, w: 200, h: 1600 },
-      { x: 2100, y: 700, w: 200, h: 1600 },
-      { x: 900, y: 700, w: 1200, h: 200 },
-      { x: 900, y: 2100, w: 1200, h: 200 }
-    ],
-    bushes: [{ x: 1300, y: 1300, w: 400, h: 400 }],
-    spawners: [{ x: 1500, y: 250 }, { x: 1500, y: 2750 }, { x: 300, y: 1500 }, { x: 2700, y: 1500 }],
-    playerSpawn: { x: 1500, y: 1500 }
-  },
-  {
-    width: 3000, height: 3000,
-    obstacles: [
-      { x: 450, y: 450, w: 450, h: 450 }, { x: 2100, y: 450, w: 450, h: 450 },
-      { x: 450, y: 2100, w: 450, h: 450 }, { x: 2100, y: 2100, w: 450, h: 450 },
-      { x: 1200, y: 1200, w: 600, h: 600 }
-    ],
-    bushes: [],
-    spawners: [{ x: 1500, y: 200 }, { x: 1500, y: 2800 }, { x: 200, y: 1500 }, { x: 2800, y: 1500 }],
-    playerSpawn: { x: 1500, y: 980 }
-  },
-  {
-    width: 3000, height: 3000,
-    obstacles: [
-      { x: 0, y: 1300, w: 1200, h: 120 },
-      { x: 1800, y: 1300, w: 1200, h: 120 },
-      { x: 0, y: 1580, w: 1200, h: 120 },
-      { x: 1800, y: 1580, w: 1200, h: 120 },
-      { x: 1380, y: 600, w: 240, h: 1800 }
-    ],
-    bushes: [{ x: 1280, y: 1360, w: 440, h: 280 }],
-    spawners: [{ x: 200, y: 200 }, { x: 2800, y: 200 }, { x: 200, y: 2800 }, { x: 2800, y: 2800 }],
-    playerSpawn: { x: 1500, y: 1500 }
-  },
-  {
-    width: 3000, height: 3000,
-    obstacles: [
-      { x: 600, y: 600, w: 1800, h: 120 },
-      { x: 600, y: 2280, w: 1800, h: 120 },
-      { x: 600, y: 720, w: 120, h: 1560 },
-      { x: 2280, y: 720, w: 120, h: 1560 },
-      { x: 1200, y: 1200, w: 600, h: 600 }
-    ],
-    bushes: [],
-    spawners: [{ x: 300, y: 1500 }, { x: 2700, y: 1500 }, { x: 1500, y: 300 }, { x: 1500, y: 2700 }],
-    playerSpawn: { x: 1500, y: 900 }
-  },
-  {
-    width: 3000, height: 3000,
-    obstacles: [
-      { x: 900, y: 0, w: 140, h: 1300 },
-      { x: 900, y: 1700, w: 140, h: 1300 },
-      { x: 1960, y: 0, w: 140, h: 1300 },
-      { x: 1960, y: 1700, w: 140, h: 1300 },
-      { x: 1200, y: 1380, w: 600, h: 240 }
-    ],
-    bushes: [{ x: 1220, y: 1400, w: 560, h: 200 }],
-    spawners: [{ x: 200, y: 300 }, { x: 2800, y: 300 }, { x: 200, y: 2700 }, { x: 2800, y: 2700 }],
-    playerSpawn: { x: 1500, y: 1500 }
-  },
-  {
-    width: 3000, height: 3000,
-    obstacles: [
-      { x: 400, y: 400, w: 500, h: 220 },
-      { x: 2100, y: 400, w: 500, h: 220 },
-      { x: 400, y: 2380, w: 500, h: 220 },
-      { x: 2100, y: 2380, w: 500, h: 220 },
-      { x: 1200, y: 850, w: 600, h: 1300 }
-    ],
-    bushes: [],
-    spawners: [{ x: 1500, y: 150 }, { x: 1500, y: 2850 }, { x: 150, y: 1500 }, { x: 2850, y: 1500 }],
-    playerSpawn: { x: 950, y: 1500 }
-  },
-  {
-    width: 3000, height: 3000,
-    obstacles: [
-      { x: 0, y: 0, w: 3000, h: 100 },
-      { x: 0, y: 2900, w: 3000, h: 100 },
-      { x: 0, y: 0, w: 100, h: 3000 },
-      { x: 2900, y: 0, w: 100, h: 3000 },
-      { x: 700, y: 700, w: 1600, h: 80 },
-      { x: 700, y: 2220, w: 1600, h: 80 }
-    ],
-    bushes: [{ x: 1300, y: 1250, w: 400, h: 500 }],
-    spawners: [{ x: 300, y: 300 }, { x: 2700, y: 300 }, { x: 300, y: 2700 }, { x: 2700, y: 2700 }],
-    playerSpawn: { x: 1500, y: 1500 }
-  },
-  {
-    width: 3000, height: 3000,
-    obstacles: [
-      { x: 500, y: 500, w: 2000, h: 180 },
-      { x: 500, y: 2320, w: 2000, h: 180 },
-      { x: 500, y: 680, w: 180, h: 1640 },
-      { x: 2320, y: 680, w: 180, h: 1640 },
-      { x: 1300, y: 1200, w: 400, h: 600 }
-    ],
-    bushes: [],
-    spawners: [{ x: 1500, y: 250 }, { x: 1500, y: 2750 }, { x: 250, y: 1500 }, { x: 2750, y: 1500 }],
-    playerSpawn: { x: 900, y: 900 }
-  },
+  // Map 3: 环形岛
   {
     width: 3000, height: 3000,
     obstacles: [
       { x: 800, y: 800, w: 500, h: 500 },
       { x: 1700, y: 800, w: 500, h: 500 },
       { x: 800, y: 1700, w: 500, h: 500 },
-      { x: 1700, y: 1700, w: 500, h: 500 }
+      { x: 1700, y: 1700, w: 500, h: 500 },
     ],
-    bushes: [{ x: 1400, y: 1400, w: 200, h: 200 }],
-    spawners: [{ x: 200, y: 200 }, { x: 2800, y: 200 }, { x: 200, y: 2800 }, { x: 2800, y: 2800 }, { x: 1500, y: 200 }, { x: 1500, y: 2800 }],
+    bushes: [],
+    spawners: [
+      { x: 150, y: 150 }, { x: 2850, y: 150 }, { x: 150, y: 2850 }, { x: 2850, y: 2850 },
+      { x: 1500, y: 150 }, { x: 1500, y: 2850 }, { x: 150, y: 1500 }, { x: 2850, y: 1500 }
+    ],
+    playerSpawn: { x: 1500, y: 1500 }
+  },
+  // Map 4: 蜂窝
+  {
+    width: 3000, height: 3000,
+    obstacles: [
+      { x: 825, y: 825, w: 150, h: 150 },
+      { x: 1425, y: 825, w: 150, h: 150 },
+      { x: 2025, y: 825, w: 150, h: 150 },
+      { x: 825, y: 1425, w: 150, h: 150 },
+      { x: 2025, y: 1425, w: 150, h: 150 },
+      { x: 825, y: 2025, w: 150, h: 150 },
+      { x: 1425, y: 2025, w: 150, h: 150 },
+      { x: 2025, y: 2025, w: 150, h: 150 },
+    ],
+    bushes: [],
+    spawners: [
+      { x: 150, y: 1500 }, { x: 2850, y: 1500 }, { x: 1000, y: 150 }, { x: 2000, y: 150 }, { x: 1000, y: 2850 }, { x: 2000, y: 2850 }
+    ],
+    playerSpawn: { x: 1500, y: 1500 }
+  },
+  // Map 5: 迷宫一
+  {
+    width: 3000, height: 3000,
+    obstacles: [
+      { x: 800, y: 800, w: 1400, h: 100 },
+      { x: 800, y: 800, w: 100, h: 1400 },
+      { x: 2100, y: 1500, w: 100, h: 700 },
+      { x: 1500, y: 2100, w: 700, h: 100 },
+    ],
+    bushes: [],
+    spawners: [
+      { x: 150, y: 150 }, { x: 2850, y: 150 }, { x: 150, y: 2850 }, { x: 2850, y: 2850 },
+      { x: 1500, y: 150 }, { x: 1500, y: 2850 }
+    ],
+    playerSpawn: { x: 1500, y: 1500 }
+  },
+  // Map 6: 对称双室
+  {
+    width: 3000, height: 3000,
+    obstacles: [
+      { x: 1450, y: 150, w: 100, h: 900 },
+      { x: 1450, y: 1350, w: 100, h: 300 },
+      { x: 1450, y: 1950, w: 100, h: 900 },
+    ],
+    bushes: [],
+    spawners: [
+      { x: 150, y: 500 }, { x: 150, y: 1500 }, { x: 150, y: 2500 },
+      { x: 2850, y: 500 }, { x: 2850, y: 1500 }, { x: 2850, y: 2500 }
+    ],
+    playerSpawn: { x: 750, y: 1500 }
+  },
+  // Map 7: 阶梯
+  {
+    width: 3000, height: 3000,
+    obstacles: [
+      { x: 600, y: 600, w: 200, h: 80 },
+      { x: 1000, y: 1000, w: 200, h: 80 },
+      { x: 1400, y: 1400, w: 200, h: 80 },
+      { x: 1800, y: 1800, w: 200, h: 80 },
+      { x: 2200, y: 2200, w: 200, h: 80 },
+    ],
+    bushes: [],
+    spawners: [
+      { x: 150, y: 150 }, { x: 2850, y: 150 }, { x: 150, y: 2850 }, { x: 2850, y: 2850 }
+    ],
+    playerSpawn: { x: 1200, y: 1600 }
+  },
+  // Map 8: 竞技场
+  {
+    width: 3000, height: 3000,
+    obstacles: [
+      { x: 500, y: 500, w: 800, h: 100 },
+      { x: 1700, y: 500, w: 800, h: 100 },
+      { x: 500, y: 2400, w: 800, h: 100 },
+      { x: 1700, y: 2400, w: 800, h: 100 },
+      { x: 500, y: 600, w: 100, h: 700 },
+      { x: 500, y: 1700, w: 100, h: 700 },
+      { x: 2400, y: 600, w: 100, h: 700 },
+      { x: 2400, y: 1700, w: 100, h: 700 },
+    ],
+    bushes: [],
+    spawners: [
+      { x: 1500, y: 200 }, { x: 1500, y: 2800 }, { x: 200, y: 1500 }, { x: 2800, y: 1500 }
+    ],
+    playerSpawn: { x: 1500, y: 1500 }
+  },
+  // Map 9: 星型
+  {
+    width: 3000, height: 3000,
+    obstacles: [
+      { x: 1300, y: 500, w: 400, h: 400 },
+      { x: 1300, y: 2100, w: 400, h: 400 },
+      { x: 500, y: 1300, w: 400, h: 400 },
+      { x: 2100, y: 1300, w: 400, h: 400 },
+    ],
+    bushes: [],
+    spawners: [
+      { x: 150, y: 150 }, { x: 2850, y: 150 }, { x: 150, y: 2850 }, { x: 2850, y: 2850 }
+    ],
+    playerSpawn: { x: 1500, y: 1500 }
+  },
+  // Map 10: 压缩通道
+  {
+    width: 3000, height: 3000,
+    obstacles: [
+      { x: 150, y: 800, w: 1700, h: 100 },
+      { x: 2150, y: 800, w: 700, h: 100 },
+      { x: 150, y: 1600, w: 500, h: 100 },
+      { x: 950, y: 1600, w: 1900, h: 100 },
+      { x: 150, y: 2400, w: 1700, h: 100 },
+      { x: 2150, y: 2400, w: 700, h: 100 },
+    ],
+    bushes: [],
+    spawners: [
+      { x: 500, y: 150 }, { x: 1500, y: 150 }, { x: 2500, y: 150 },
+      { x: 500, y: 2850 }, { x: 1500, y: 2850 }, { x: 2500, y: 2850 }
+    ],
+    playerSpawn: { x: 1500, y: 1200 }
+  },
+  // Map 11: 孤岛群
+  {
+    width: 3000, height: 3000,
+    obstacles: [
+      { x: 800, y: 800, w: 100, h: 100 },
+      { x: 2200, y: 800, w: 100, h: 100 },
+      { x: 800, y: 2200, w: 100, h: 100 },
+      { x: 2200, y: 2200, w: 100, h: 100 },
+      { x: 1500, y: 800, w: 100, h: 100 },
+      { x: 800, y: 1500, w: 100, h: 100 },
+      { x: 2200, y: 1500, w: 100, h: 100 },
+    ],
+    bushes: [],
+    spawners: [
+      { x: 150, y: 150 }, { x: 2850, y: 150 }, { x: 150, y: 2850 }, { x: 2850, y: 2850 }
+    ],
+    playerSpawn: { x: 1500, y: 1500 }
+  },
+  // Map 12: 回字形
+  {
+    width: 3000, height: 3000,
+    obstacles: [
+      { x: 500, y: 500, w: 2000, h: 100 },
+      { x: 500, y: 2400, w: 2000, h: 100 },
+      { x: 500, y: 600, w: 100, h: 1800 },
+      { x: 2400, y: 600, w: 100, h: 1800 },
+      { x: 1000, y: 1000, w: 400, h: 100 },
+      { x: 1600, y: 1000, w: 400, h: 100 },
+      { x: 1000, y: 1900, w: 400, h: 100 },
+      { x: 1600, y: 1900, w: 400, h: 100 },
+      { x: 1000, y: 1100, w: 100, h: 300 },
+      { x: 1000, y: 1600, w: 100, h: 300 },
+      { x: 1900, y: 1100, w: 100, h: 300 },
+      { x: 1900, y: 1600, w: 100, h: 300 },
+    ],
+    bushes: [],
+    spawners: [
+      { x: 750, y: 750 }, { x: 2250, y: 750 }, { x: 750, y: 2250 }, { x: 2250, y: 2250 }
+    ],
+    playerSpawn: { x: 1500, y: 1500 }
+  },
+  // Map 13: 工厂
+  {
+    width: 3000, height: 3000,
+    obstacles: [
+      { x: 660, y: 660, w: 80, h: 80 }, { x: 1060, y: 660, w: 80, h: 80 }, { x: 1460, y: 660, w: 80, h: 80 }, { x: 1860, y: 660, w: 80, h: 80 }, { x: 2260, y: 660, w: 80, h: 80 },
+      { x: 660, y: 1060, w: 80, h: 80 }, { x: 1060, y: 1060, w: 80, h: 80 }, { x: 1460, y: 1060, w: 80, h: 80 }, { x: 1860, y: 1060, w: 80, h: 80 }, { x: 2260, y: 1060, w: 80, h: 80 },
+      { x: 660, y: 1460, w: 80, h: 80 }, { x: 1060, y: 1460, w: 80, h: 80 }, { x: 1860, y: 1460, w: 80, h: 80 }, { x: 2260, y: 1460, w: 80, h: 80 },
+      { x: 660, y: 1860, w: 80, h: 80 }, { x: 1060, y: 1860, w: 80, h: 80 }, { x: 1460, y: 1860, w: 80, h: 80 }, { x: 1860, y: 1860, w: 80, h: 80 }, { x: 2260, y: 1860, w: 80, h: 80 },
+      { x: 660, y: 2260, w: 80, h: 80 }, { x: 1060, y: 2260, w: 80, h: 80 }, { x: 1460, y: 2260, w: 80, h: 80 }, { x: 1860, y: 2260, w: 80, h: 80 }, { x: 2260, y: 2260, w: 80, h: 80 },
+    ],
+    bushes: [],
+    spawners: [
+      { x: 150, y: 150 }, { x: 2850, y: 150 }, { x: 150, y: 2850 }, { x: 2850, y: 2850 }
+    ],
+    playerSpawn: { x: 1500, y: 1500 }
+  },
+  // Map 14: 混沌
+  {
+    width: 3000, height: 3000,
+    obstacles: [
+      { x: 400, y: 400, w: 200, h: 150 }, { x: 800, y: 500, w: 100, h: 300 }, { x: 1800, y: 400, w: 300, h: 100 }, { x: 2400, y: 600, w: 150, h: 200 },
+      { x: 500, y: 1200, w: 250, h: 100 }, { x: 1000, y: 1000, w: 150, h: 150 }, { x: 2000, y: 1100, w: 100, h: 250 }, { x: 2500, y: 1300, w: 200, h: 150 },
+      { x: 400, y: 1800, w: 100, h: 200 }, { x: 900, y: 1900, w: 300, h: 100 }, { x: 1800, y: 1800, w: 150, h: 150 }, { x: 2300, y: 2000, w: 200, h: 100 },
+      { x: 600, y: 2400, w: 200, h: 200 }, { x: 1200, y: 2500, w: 150, h: 100 }, { x: 1900, y: 2400, w: 250, h: 150 }
+    ],
+    bushes: [],
+    spawners: [
+      { x: 150, y: 150 }, { x: 1500, y: 150 }, { x: 2850, y: 150 },
+      { x: 150, y: 1500 }, { x: 2850, y: 1500 },
+      { x: 150, y: 2850 }, { x: 1500, y: 2850 }, { x: 2850, y: 2850 }
+    ],
+    playerSpawn: { x: 1500, y: 1500 }
+  },
+  // Map 15: 最终竞技场
+  {
+    width: 3000, height: 3000,
+    obstacles: [],
+    bushes: [
+      { x: 200, y: 200, w: 50, h: 50 },
+      { x: 2750, y: 200, w: 50, h: 50 },
+      { x: 200, y: 2750, w: 50, h: 50 },
+      { x: 2750, y: 2750, w: 50, h: 50 },
+    ],
+    spawners: [
+      { x: 150, y: 150 }, { x: 1500, y: 150 }, { x: 2850, y: 150 },
+      { x: 150, y: 1500 }, { x: 2850, y: 1500 },
+      { x: 150, y: 2850 }, { x: 1500, y: 2850 }, { x: 2850, y: 2850 }
+    ],
     playerSpawn: { x: 1500, y: 1500 }
   }
-
 ];
 
 export interface Room {
@@ -609,6 +633,13 @@ export interface Room {
   dynamicObstacles: {x: number, y: number, w: number, h: number}[];
   activeEvent: 'NONE' | 'DIV0' | 'OOM';
   eventTimer: number;
+  skillPickCount: number;
+  totalKills: number;
+  startTime: number;
+  endTime?: number;
+  gameOver?: 'victory' | 'defeat';
+  bossSpawned?: boolean;
+  recentExplosions: {x: number, y: number, time: number}[];
 }
 
 export function createRoom(roomId: string): Room {
@@ -638,6 +669,10 @@ export function createRoom(roomId: string): Room {
     margin: 0,
     dynamicObstacles: [],
     activeEvent: 'NONE',
-    eventTimer: 0
+    eventTimer: 0,
+    skillPickCount: 1,
+    totalKills: 0,
+    startTime: Date.now(),
+    recentExplosions: []
   };
 }

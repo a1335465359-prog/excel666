@@ -1,12 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AttackForm, Upgrade, SpecificUpgrade, GeneralUpgrade, Player, Enemy, Bullet, MAPS, Room, createRoom, EnemyType, ATTACK_FORM_NAMES, ATTACK_FORM_DESCS, UPGRADE_NAMES, UPGRADE_DESCS } from './gameLogic';
+import { AttackForm, Upgrade, SpecificUpgrade, GeneralUpgrade, Player, Enemy, Bullet, Laser, MAPS, Room, createRoom, EnemyType, ATTACK_FORM_NAMES, ATTACK_FORM_DESCS, UPGRADE_NAMES, UPGRADE_DESCS } from './gameLogic';
 import { MainMenu } from './components/MainMenu';
-import { GameOver, GameClear, FormSelection, UpgradeSelection, SumSkillOverlay, GridMenu, GridToolOverlay } from './components/UI';
-import { attachInputHandlers } from './modules/inputHandlers';
-import { applyGridAction, applySelectedForm, applySelectedUpgrade } from './modules/combatHandlers';
-import { clampGridMenuPosToViewport } from './modules/renderUtils';
-
-const TOTAL_STAGES = 15;
+import { GameOver, FormSelection, UpgradeSelection, SumSkillOverlay, GridMenu, GridToolOverlay } from './components/UI';
 
 const getStageDuration = (stage: number) => {
   if (stage === 1) return 30;
@@ -23,16 +18,12 @@ function generateUpgradeChoices(room: Room, player: Player): Upgrade[] {
   const allSpecific = [
     'wordart_size', 'wordart_weight', 'wordart_spread', 'wordart_title', 'wordart_ult',
     'wordart_wide', 'wordart_fast_push', 'wordart_shield', 'wordart_stun', 'wordart_quad',
-    'wordart_all_caps', 'wordart_hotkey', 'wordart_typewriter', 'wordart_revision', 'wordart_subscript',
     'sparkline_width', 'sparkline_focus', 'sparkline_bounce', 'sparkline_rapid', 'sparkline_ult',
     'sparkline_freeze', 'sparkline_cannon', 'sparkline_reflect', 'sparkline_overclock',
-    'sparkline_burn', 'sparkline_killshot', 'sparkline_execute', 'sparkline_tenshot', 'sparkline_charge',
     'comment_size', 'comment_chain', 'comment_residue', 'comment_fast', 'comment_ult',
     'comment_triple', 'comment_knockback', 'comment_split', 'comment_black', 'comment_super',
-    'comment_density', 'comment_mark', 'comment_wallbounce', 'comment_proximity', 'comment_battery',
     'array_count', 'array_split', 'array_track', 'array_fast', 'array_ult',
-    'array_plus_2', 'array_rapid', 'array_bounce', 'array_pierce', 'array_big',
-    'array_ricochet', 'array_converge', 'array_single', 'array_orbit', 'array_scatter'
+    'array_overload', 'array_rapid', 'array_bounce', 'array_pierce', 'array_big'
   ] as SpecificUpgrade[];
   
   const formSpecific = allSpecific.filter(u => u.startsWith(form));
@@ -42,6 +33,13 @@ function generateUpgradeChoices(room: Room, player: Player): Upgrade[] {
   let availableGeneral = allGeneral.filter(u => !player.generalUpgrades.includes(u));
   if (form === 'sparkline') {
     availableGeneral = availableGeneral.filter(u => u !== 'format_painter');
+  }
+
+  if (room.stage < 3) {
+    availableGeneral = availableGeneral.filter(u => !['format_painter', 'ctrl_z', 'ctrl_c'].includes(u));
+  }
+  if (room.stage < 2) {
+    availableGeneral = availableGeneral.filter(u => !['highlight', 'strikethrough', 'underline'].includes(u));
   }
 
   const has3Specific = player.specificUpgrades.length >= 3;
@@ -66,7 +64,7 @@ function generateUpgradeChoices(room: Room, player: Player): Upgrade[] {
     pool = pool.filter(u => u !== specificChoice);
   }
 
-  const numChoices = room.stage <= 4 ? 5 : 3;
+  const numChoices = (room.stage === 4 && room.stageTimer >= 2400) ? 5 : 3;
 
   while (choices.length < numChoices && pool.length > 0) {
     const specificInPool = pool.filter(u => availableSpecific.includes(u as SpecificUpgrade));
@@ -74,7 +72,9 @@ function generateUpgradeChoices(room: Room, player: Player): Upgrade[] {
     
     let choice: Upgrade;
     // Prioritize specific upgrades in early game
-    const specificChance = room.stage <= 4 ? 0.92 : 0.4;
+    let specificChance = 0.4;
+    if (room.stage <= 2) specificChance = 0.8;
+    else if (room.stage <= 4) specificChance = 0.6;
     
     if (specificInPool.length > 0 && Math.random() < specificChance) {
       choice = specificInPool[Math.floor(Math.random() * specificInPool.length)];
@@ -106,6 +106,10 @@ export default function App() {
     skillChoices: Upgrade[];
     formChoices: AttackForm[];
     players: Record<string, Player>;
+    gameOver?: 'victory' | 'defeat';
+    totalKills?: number;
+    survivalSeconds?: number;
+    playerUpgradeNames?: string[];
   } | null>(null);
   const myId = 'player1';
   
@@ -122,18 +126,10 @@ export default function App() {
 
   const [showGridMenu, setShowGridMenu] = useState(false);
   const [gridMenuPos, setGridMenuPos] = useState({x: 0, y: 0});
-  const [isCleared, setIsCleared] = useState(false);
-  const [finalScore, setFinalScore] = useState(0);
 
   const isSelectingGridRef = useRef(false);
   const selectionStartRef = useRef<{x: number, y: number} | null>(null);
   const selectionEndRef = useRef<{x: number, y: number} | null>(null);
-
-  const clampGridMenuPos = (x: number, y: number) => {
-    const maxW = containerRef.current?.clientWidth || window.innerWidth;
-    const maxH = containerRef.current?.clientHeight || window.innerHeight;
-    return clampGridMenuPosToViewport(x, y, maxW, maxH);
-  };
 
   const joinRoom = () => {
     if (roomInput.trim()) {
@@ -159,43 +155,108 @@ export default function App() {
         invincibleUntil: 0,
         sumStacks: 0,
         wordartCounter: 0,
-        commentCounter: 0,
-        laserCharge: 0,
-        lastChargeTime: 0,
-        lasersHit: 0,
-        nextLaserCrit: false
+        commentCounter: 0
       };
       gameStateRef.current = room;
-      setIsCleared(false);
-      setFinalScore(0);
-      setUiState({
-        stage: room.stage,
-        stageTimer: room.stageTimer,
-        isSelectingSkill: room.isSelectingSkill,
-        isSelectingForm: room.isSelectingForm,
-        skillChoices: room.skillChoices,
-        formChoices: room.formChoices,
-        players: JSON.parse(JSON.stringify(room.players))
-      });
       setCurrentRoom(roomInput.trim());
     }
   };
 
   useEffect(() => {
-    return attachInputHandlers({
-      keys,
-      mouse,
-      gameStateRef,
-      containerRef,
-      selectionStartRef,
-      selectionEndRef,
-      isSelectingGridRef,
-      showGridMenu,
-      setShowGridMenu,
-      setGridMenuPos,
-      clampGridMenuPos,
-      myId
-    });
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'w' || e.key === 'W') keys.current.w = true;
+      if (e.key === 'a' || e.key === 'A') keys.current.a = true;
+      if (e.key === 's' || e.key === 'S') keys.current.s = true;
+      if (e.key === 'd' || e.key === 'D') keys.current.d = true;
+      if (e.key === ' ') {
+        const gs = gameStateRef.current;
+        if (gs && gs.players[myId]) {
+          const p = gs.players[myId];
+          if (p.gridToolCharges && p.gridToolCharges > 0 && gs.bulletTime <= 0) {
+            // p.gridToolCharges--;
+            // gs.bulletTime = 300;
+          }
+        }
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'w' || e.key === 'W') keys.current.w = false;
+      if (e.key === 'a' || e.key === 'A') keys.current.a = false;
+      if (e.key === 's' || e.key === 'S') keys.current.s = false;
+      if (e.key === 'd' || e.key === 'D') keys.current.d = false;
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      mouse.current.x = e.clientX - rect.left;
+      mouse.current.y = e.clientY - rect.top;
+      
+      if (isSelectingGridRef.current && selectionStartRef.current) {
+        selectionEndRef.current = { x: mouse.current.x, y: mouse.current.y };
+      }
+    };
+
+    const handleMouseDown = (e: MouseEvent) => { 
+      if (e.button !== 0) return;
+      mouse.current.isDown = true; 
+      
+      if (showGridMenu) {
+        // If clicking outside the menu, close it
+        const menuEl = document.getElementById('grid-menu');
+        if (menuEl && !menuEl.contains(e.target as Node)) {
+          setShowGridMenu(false);
+          if (gameStateRef.current) gameStateRef.current.bulletTime = 0;
+        }
+        return;
+      }
+
+      const gs = gameStateRef.current;
+      if (gs && gs.bulletTime > 0 && !showGridMenu) {
+        isSelectingGridRef.current = true;
+        selectionStartRef.current = { x: mouse.current.x, y: mouse.current.y };
+        selectionEndRef.current = { x: mouse.current.x, y: mouse.current.y };
+      }
+    };
+    
+    const handleMouseUp = (e: MouseEvent) => { 
+      if (e.button !== 0) return;
+      mouse.current.isDown = false; 
+      
+      if (isSelectingGridRef.current) {
+        isSelectingGridRef.current = false;
+        if (selectionStartRef.current && selectionEndRef.current) {
+          const dx = Math.abs(selectionEndRef.current.x - selectionStartRef.current.x);
+          const dy = Math.abs(selectionEndRef.current.y - selectionStartRef.current.y);
+          if (dx > 10 && dy > 10) {
+            setShowGridMenu(true);
+            let menuX = mouse.current.x;
+            let menuY = mouse.current.y;
+            if (menuX + 200 > window.innerWidth) menuX = window.innerWidth - 200;
+            if (menuY + 150 > window.innerHeight) menuY = window.innerHeight - 150;
+            setGridMenuPos({ x: menuX, y: menuY });
+          } else {
+            selectionStartRef.current = null;
+            selectionEndRef.current = null;
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
   }, [showGridMenu]);
 
   // Game Loop
@@ -205,19 +266,20 @@ export default function App() {
     let tick = 0;
     let lastUiUpdate = 0;
     let lastIsSelecting = false;
-    let lastIsSelectingForm = false;
+    let lastIsSelectingForm = true;
 
     const gameLoop = () => {
       const room = gameStateRef.current;
       if (!room) return;
 
       tick++;
-      const now = renderNow;
+      const now = Date.now();
       const currentMap = MAPS[Math.min(room.stage - 1, MAPS.length - 1)];
 
       // Update UI
-      const forceUpdate = room.isSelectingSkill !== lastIsSelecting || room.isSelectingForm !== lastIsSelectingForm;
+      const forceUpdate = room.isSelectingSkill !== lastIsSelecting || room.isSelectingForm !== lastIsSelectingForm || room.gameOver !== undefined;
       if (forceUpdate || now - lastUiUpdate > 250) {
+        const me = room.players[myId];
         setUiState({
           stage: room.stage,
           stageTimer: room.stageTimer,
@@ -225,58 +287,57 @@ export default function App() {
           isSelectingForm: room.isSelectingForm,
           skillChoices: room.skillChoices,
           formChoices: room.formChoices,
-          players: JSON.parse(JSON.stringify(room.players))
+          players: JSON.parse(JSON.stringify(room.players)),
+          gameOver: room.gameOver,
+          totalKills: room.totalKills,
+          survivalSeconds: Math.floor(((room.endTime || Date.now()) - room.startTime) / 1000),
+          playerUpgradeNames: [...(me?.generalUpgrades || []), ...(me?.specificUpgrades || [])].map(u => UPGRADE_NAMES[u])
         });
         lastUiUpdate = now;
         lastIsSelecting = room.isSelectingSkill;
         lastIsSelectingForm = room.isSelectingForm;
       }
 
-      if (isCleared || room.isSelectingSkill || room.isSelectingForm) return;
+      if (room.players[myId]?.hp <= 0 && !room.gameOver) {
+        room.gameOver = 'defeat';
+        room.endTime = Date.now();
+      }
+
+      if (room.isSelectingSkill || room.isSelectingForm || room.gameOver) return;
 
       room.stageTimer++;
       if (room.bulletTime > 0) room.bulletTime--;
 
       const timeSpeed = room.bulletTime > 0 ? 0.1 : 1.0;
-      let stageDuration = 3600;
-      if (room.stage === 1) stageDuration = 1800;
-      else if (room.stage === 2) stageDuration = 2400;
-      else if (room.stage === 3) stageDuration = 3000;
+      const stageDuration = getStageDuration(room.stage) * 60;
 
       room.margin = 0;
 
       if (room.stageTimer >= stageDuration) {
-        if (room.stage >= TOTAL_STAGES) {
-          const me = room.players[myId];
-          const score = (me?.kills || 0) * 10 + room.stage * 200 - (me?.deaths || 0) * 100;
-          setFinalScore(Math.max(0, score));
-          setIsCleared(true);
+        if (room.players[myId]?.specificUpgrades.length + room.players[myId]?.generalUpgrades.length < Object.keys(UPGRADE_NAMES).length) {
+          room.skillChoices = generateUpgradeChoices(room, room.players[myId]);
+          room.players[myId].upgradesToChoose = room.stage === 4 ? 2 : 1;
+          room.isSelectingSkill = true;
           return;
-        }
-
-        room.skillChoices = generateUpgradeChoices(room, room.players[myId]);
-        if (room.skillChoices.length === 0) {
+        } else {
+          // Auto-advance if no upgrades left
           room.stage++;
           room.stageTimer = 0;
-          const nextMap = MAPS[Math.min(room.stage - 1, MAPS.length - 1)];
-          const me = room.players[myId];
-          if (me) {
-            me.x = nextMap.playerSpawn.x;
-            me.y = nextMap.playerSpawn.y;
+          room.bossSpawned = false;
+          if (room.stage <= 15) {
+            room.enemies = []; 
+            room.bullets = [];
+            room.puddles = [];
+            room.enemyBullets = [];
+            room.aoeWarnings = [];
+            room.lasers = [];
+            room.items = [];
+            room.dynamicObstacles = [];
+            const currentMap = MAPS[Math.min(room.stage - 1, MAPS.length - 1)];
+            room.players[myId].x = currentMap.playerSpawn.x;
+            room.players[myId].y = currentMap.playerSpawn.y;
           }
-          room.enemies = [];
-          room.bullets = [];
-          room.puddles = [];
-          room.enemyBullets = [];
-          room.aoeWarnings = [];
-          room.lasers = [];
-          room.items = [];
-          room.dynamicObstacles = [];
-          return;
         }
-        room.players[myId].upgradesToChoose = (room.stage === 4 || room.stage === 8) ? 2 : 1; //保留
-        room.isSelectingSkill = true;
-        return;
       }
 
       if (room.stage >= 5) {
@@ -285,7 +346,7 @@ export default function App() {
           if (room.eventTimer <= 0) {
             room.activeEvent = 'NONE';
           }
-        } else if (room.stageTimer % 3600 === 0 && room.stageTimer > 0) {
+        } else if (room.stageTimer % 1800 === 0 && room.stageTimer > 0) {
           room.activeEvent = Math.random() < 0.5 ? 'DIV0' : 'OOM';
           room.eventTimer = 900; // 15 seconds
         }
@@ -323,18 +384,18 @@ export default function App() {
 
       const spawnChance = 0.03 + (room.stage * 0.015) + (room.stageTimer / stageDuration) * 0.05;
       
+      const hpMult = room.stage >= 5 ? 1 + (room.stage - 5) * 0.5 : 1;
 
       if (room.stage >= 5 && room.stageTimer === 100) {
+        room.bossSpawned = true;
         const bossCount = room.stage === 5 ? 1 : Math.floor((room.stage - 4) / 2) + 1;
         for (let i = 0; i < bossCount; i++) {
           const spawner = currentMap.spawners[Math.floor(Math.random() * currentMap.spawners.length)];
           let bossHp = 3300 * Math.pow(1.12, room.stage - 5);
           let spawnX = spawner.x + (Math.random() - 0.5) * 200;
           let spawnY = spawner.y + (Math.random() - 0.5) * 200;
-          const halfW = 250;
-          const halfH = 40;
-          spawnX = Math.max(halfW + 10, Math.min(currentMap.width - halfW - 10, spawnX));
-          spawnY = Math.max(halfH + 10, Math.min(currentMap.height - halfH - 10, spawnY));
+          spawnX = Math.max(250, Math.min(currentMap.width - 250, spawnX));
+          spawnY = Math.max(40, Math.min(currentMap.height - 40, spawnY));
           room.enemies.push({
             id: room.enemyIdCounter++,
             type: 'EliteBoss',
@@ -485,7 +546,7 @@ export default function App() {
         let speedMultiplier = 1;
         
         if (p.attackForm === 'wordart') {
-          speedMultiplier *= p.specificUpgrades.includes('wordart_all_caps') ? 0.9 : 0.7; // -10% or -30% speed //保留
+          speedMultiplier *= 0.7; // -30% speed
           if (p.specificUpgrades.includes('wordart_shield')) {
             speedMultiplier *= 0.85; // Additional -10% (relative to base, but multiplying is fine, or subtract)
           }
@@ -498,7 +559,7 @@ export default function App() {
           }
         }
         if (inFormatPaint) speedMultiplier *= 0.4;
-        
+        if (p.slowUntil && Date.now() < p.slowUntil) speedMultiplier *= (p.slowFactor || 1);
         
         const speed = 6 * speedMultiplier;
         let dx = 0;
@@ -520,10 +581,13 @@ export default function App() {
         p.x = Math.max(room.margin, Math.min(currentMap.width - room.margin, p.x));
         p.y = Math.max(room.margin, Math.min(currentMap.height - room.margin, p.y));
 
-        for (let i = room.items.length - 1; i >= 0; i--) {
+        room.items = room.items.filter(item => Date.now() - item.spawnTime < 10000);
+
+      for (let i = room.items.length - 1; i >= 0; i--) {
           const item = room.items[i];
           if (Math.hypot(p.x - item.x, p.y - item.y) < 50) {
             p.gridToolCharges = (p.gridToolCharges || 0) + 1;
+            room.bulletTime = 300;
             room.items.splice(i, 1);
             shake.current = 5;
           }
@@ -537,13 +601,6 @@ export default function App() {
         }
 
         const isShooting = mouse.current.isDown && !isSelectingGridRef.current && !showGridMenu && room.bulletTime <= 0;
-
-        if (p.attackForm === 'sparkline' && !isShooting) {
-          if ((p.laserCharge || 0) < 3 && now - (p.lastChargeTime || 0) > 1000) {
-            p.laserCharge = (p.laserCharge || 0) + 1;
-            p.lastChargeTime = now;
-          }
-        }
 
         if (isShooting && p.attackForm) {
           const form = p.attackForm;
@@ -564,17 +621,10 @@ export default function App() {
           let critChance = 0;
           let critMult = 1;
           let eliteDamageMult = 1;
-          let bulletSpeedMult = 1;
-          let fireRateMult = 1;
-          let commentKnockbackMult = 1;
 
           if (general.includes('bold')) {
             damageMult *= 1.3;
             knockbackAdd += 6;
-          }
-          if (general.includes('italic')) {
-            bulletSpeedMult *= 1.15;
-            fireRateMult *= 0.9;
           }
           if (general.includes('strikethrough')) {
             pierce += 1;
@@ -613,11 +663,11 @@ export default function App() {
                 maxLife: 800,
                 type: 'ctrl_c',
                 isCrit: false,
-                knockback: 5,
-                isHighlight: false,
-                leavesResidue: false,
-                isItalic: false,
-                isStrikethrough: false
+                knockback: knockback + knockbackAdd,
+                isHighlight: general.includes('highlight'),
+                leavesResidue: general.includes('underline'),
+                isItalic: general.includes('italic'),
+                isStrikethrough: general.includes('strikethrough')
               });
             }
           };
@@ -630,6 +680,11 @@ export default function App() {
             pierce = 999; // Infinite pierce
             knockback = 0; // Handled by bulldozer logic
             duration = 3000; // Increased range
+
+            if (general.includes('italic')) {
+              fireRate *= 0.9;
+              bulletSpeed *= 1.15;
+            }
 
             if (specific.includes('wordart_size')) {
               size *= 1.5;
@@ -645,9 +700,6 @@ export default function App() {
             if (specific.includes('wordart_shield')) {
               fireRate /= 0.8;
             }
-
-            fireRate *= fireRateMult;
-            bulletSpeed *= bulletSpeedMult;
 
             let wordWidth = size * 2.5;
             let wordHeight = size * 0.8;
@@ -691,7 +743,7 @@ export default function App() {
                 maxLife: duration,
                 type: 'wordart',
                 isCrit: isCrit,
-                knockback: 0,
+                knockback: knockback + knockbackAdd,
                 isTitle: isTitle,
                 isBulldozer: true, // Flag for bulldozer logic
                 isShield: specific.includes('wordart_shield'),
@@ -700,45 +752,9 @@ export default function App() {
                 isHighlight: general.includes('highlight'),
                 leavesResidue: general.includes('underline'),
                 isItalic: general.includes('italic'),
-                isStrikethrough: general.includes('strikethrough'),
-                typewriterScale: specific.includes('wordart_typewriter') ? 0.3 : undefined,
-                initialWidth: wordWidth,
-                initialHeight: wordHeight
+                isStrikethrough: general.includes('strikethrough')
               } as Bullet);
               
-              if (specific.includes('wordart_subscript')) {
-                room.bullets.push({
-                  id: room.bulletIdCounter++,
-                  owner: p.id,
-                  x: p.x, y: p.y + 60,
-                  vx: Math.cos(p.angle) * bulletSpeed,
-                  vy: Math.sin(p.angle) * bulletSpeed,
-                  angle: p.angle,
-                  damage: finalDamage * 0.4,
-                  size: size * 0.4,
-                  width: wordWidth * 0.4,
-                  height: wordHeight * 0.4,
-                  pierce: pierce,
-                  life: duration,
-                  maxLife: duration,
-                  type: 'wordart',
-                  isCrit: false,
-                  knockback: 0,
-                  isTitle: false,
-                  isBulldozer: true,
-                  isShield: specific.includes('wordart_shield'),
-                  stunChance: specific.includes('wordart_stun') ? 0.5 : 0,
-                  eliteDamageMult: eliteDamageMult,
-                  isHighlight: general.includes('highlight'),
-                  leavesResidue: general.includes('underline'),
-                  isItalic: general.includes('italic'),
-                  isStrikethrough: general.includes('strikethrough'),
-                  typewriterScale: specific.includes('wordart_typewriter') ? 0.3 : undefined,
-                  initialWidth: wordWidth * 0.4,
-                  initialHeight: wordHeight * 0.4
-                } as Bullet);
-              }
-
               fireCtrlC(finalDamage);
             }
           } else if (form === 'sparkline') {
@@ -747,6 +763,11 @@ export default function App() {
             let range = 3000; // Infinite range
             let width = 12;
             let isSlow = false;
+
+            if (general.includes('italic')) {
+              fireRate *= 0.9;
+              bulletSpeed *= 1.15;
+            }
 
             if (specific.includes('sparkline_width')) {
               width *= 1.5;
@@ -762,16 +783,10 @@ export default function App() {
               fireRate *= 0.5;
             }
 
-            fireRate *= fireRateMult;
-
             if (now - p.lastShot > fireRate && now > (p.sparklineVacuumUntil || 0)) {
               p.lastShot = now;
               
               let finalDamage = damage * damageMult;
-              if (specific.includes('sparkline_charge')) {
-                finalDamage *= (1 + (p.laserCharge || 0) * 0.7);
-                p.laserCharge = 0;
-              }
               let isCrit = false;
               if (Math.random() < critChance) {
                 isCrit = true;
@@ -779,14 +794,13 @@ export default function App() {
               }
 
               const createLaser = (angleOffset: number, dmgMult: number, extraWidth: number) => {
-                const laserWidthMult = general.includes('bold') ? 1.8 : 1;
                 room.lasers.push({
                   id: room.bulletIdCounter++,
                   owner: p.id,
                   x: p.x, y: p.y,
                   angle: p.angle + angleOffset,
                   damage: finalDamage * dmgMult,
-                  width: (width + extraWidth) * laserWidthMult,
+                  width: width + extraWidth,
                   range: range,
                   life: 15,
                   maxLife: 15,
@@ -816,12 +830,18 @@ export default function App() {
             fireRate = 600;
             damage = 50;
             bulletSpeed = 11.5; // 230px/s approx
-            let explosionRadius = 110;
+            let explosionRadius = 100;
             let count = 1;
+            let knockbackMult = 1;
+
+            if (general.includes('italic')) {
+              fireRate *= 0.9;
+              bulletSpeed *= 1.15;
+            }
 
             if (specific.includes('comment_size')) {
-              explosionRadius *= 1.5;
-              damageMult *= 1.25;
+              explosionRadius *= 1.3;
+              damageMult *= 1.2;
             }
             if (specific.includes('comment_fast')) {
               fireRate *= 0.7;
@@ -832,12 +852,10 @@ export default function App() {
               fireRate /= 0.8;
             }
             if (specific.includes('comment_knockback')) {
-              commentKnockbackMult *= 2;
+              knockbackMult = (knockbackMult || 1) * 2;
             }
 
-            explosionRadius = Math.min(explosionRadius, 220); //保留
-            fireRate *= fireRateMult;
-            bulletSpeed *= bulletSpeedMult;
+            explosionRadius = Math.min(explosionRadius, 160);
 
             if (now - p.lastShot > fireRate) {
               p.lastShot = now;
@@ -847,7 +865,7 @@ export default function App() {
               if (specific.includes('comment_ult') && p.commentCounter % 4 === 0) {
                 isUlt = true;
                 damage = 90;
-                explosionRadius = 220;
+                explosionRadius = 160;
               }
 
               let finalDamage = damage * damageMult;
@@ -872,7 +890,7 @@ export default function App() {
                   maxLife: 3000,
                   type: 'comment',
                   isCrit: isCrit,
-                  knockback: 15 * commentKnockbackMult,
+                  knockbackMult: knockbackMult,
                   explosionRadius: explosionRadius,
                   isUlt: isUlt,
                   eliteDamageMult: eliteDamageMult,
@@ -893,6 +911,11 @@ export default function App() {
             let count = 1;
             let spreadAngle = 14 * Math.PI / 180;
             let bSize = 24;
+
+            if (general.includes('italic')) {
+              fireRate *= 0.9;
+              bulletSpeed *= 1.15;
+            }
 
             if (specific.includes('array_count')) {
               count += 2;
@@ -917,19 +940,11 @@ export default function App() {
             }
 
             count = Math.min(count, 8);
-            fireRate *= fireRateMult;
-            bulletSpeed *= bulletSpeedMult;
 
             if (now - p.lastShot > fireRate) {
               p.lastShot = now;
               
               let finalDamage = damage * damageMult;
-              if (specific.includes('array_single')) {
-                const originalCount = count;
-                count = 1;
-                finalDamage *= originalCount * 0.8;
-                bulletSpeed *= 1.5;
-              }
               let isCrit = false;
               if (Math.random() < critChance) {
                 isCrit = true;
@@ -961,11 +976,7 @@ export default function App() {
                   isHighlight: general.includes('highlight'),
                   leavesResidue: general.includes('underline'),
                   isItalic: general.includes('italic'),
-                  isStrikethrough: general.includes('strikethrough'),
-                  initialAngle: p.angle,
-                  travelDist: 0,
-                  ricochetSpeed: bulletSpeed,
-                  ricochetPierce: 0
+                  isStrikethrough: general.includes('strikethrough')
                 } as Bullet);
               }
               
@@ -976,7 +987,7 @@ export default function App() {
         
         // Handle Ultimates and passive effects
         if (p.attackForm === 'wordart' && p.specificUpgrades.includes('wordart_ult')) {
-          if (now - (p.lastWordartUlt || 0) > 5000) {
+          if (now - (p.lastWordartUlt || 0) > 20000) {
             p.lastWordartUlt = now;
             room.bullets.push({
               id: room.bulletIdCounter++,
@@ -994,7 +1005,7 @@ export default function App() {
               maxLife: 2000,
               type: 'wordart',
               isCrit: false,
-              knockback: 0,
+              knockback: (knockback || 0) + knockbackAdd,
               isTitle: true,
               isBulldozer: true,
               isShield: p.specificUpgrades.includes('wordart_shield'),
@@ -1029,7 +1040,7 @@ export default function App() {
                 maxLife: 3000,
                 type: 'wordart',
                 isCrit: false,
-                knockback: 0,
+                knockback: (knockback || 0) + knockbackAdd,
                 isTitle: true,
                 isBulldozer: true,
                 isShield: p.specificUpgrades.includes('wordart_shield'),
@@ -1054,7 +1065,7 @@ export default function App() {
               x: p.x, y: p.y,
               angle: p.angle,
               damage: 9999, // High damage
-              width: p.generalUpgrades.includes('bold') ? 220 : 150, // Very wide
+              width: 150, // Very wide
               range: 5000,
               life: 30, // 0.5s duration
               maxLife: 30,
@@ -1089,7 +1100,6 @@ export default function App() {
               maxLife: 3000,
               type: 'comment',
               isCrit: true,
-              knockback: 24,
               explosionRadius: 400,
               isSuper: true,
               eliteDamageMult: 1.5,
@@ -1136,13 +1146,6 @@ export default function App() {
 
       for (let i = room.enemies.length - 1; i >= 0; i--) {
         const e = room.enemies[i];
-
-        if (e.type === 'SplitCell') {
-          e.stateTimer = (e.stateTimer || 0) - timeSpeed;
-          if ((e.stateTimer || 0) <= 0) {
-            e.hp = 0;
-          }
-        }
         
         if (e.state === 'stunned') {
           e.stateTimer = (e.stateTimer || 0) - timeSpeed;
@@ -1442,51 +1445,44 @@ export default function App() {
               }
             }
           } else if (e.type === 'MACRO') {
-            e.stateTimer = (e.stateTimer || 0) - timeSpeed;
-
-            const desiredMin = 320;
-            const desiredMax = 620;
-            let macroSpeed = 2.2;
-            if (minDist < desiredMin) {
-              macroSpeed = 5.8;
-              e.vx = -Math.cos(angle) * macroSpeed;
-              e.vy = -Math.sin(angle) * macroSpeed;
-            } else if (minDist > desiredMax) {
-              macroSpeed = 1.8;
-              e.vx = Math.cos(angle) * macroSpeed;
-              e.vy = Math.sin(angle) * macroSpeed;
+            const macroKeepDist = 350;
+            const macroFarDist = 600;
+            if (minDist < macroKeepDist) {
+              const fleeAngle = angle + Math.PI;
+              e.vx = Math.cos(fleeAngle) * 5.5;
+              e.vy = Math.sin(fleeAngle) * 5.5;
+            } else if (minDist > macroFarDist) {
+              e.vx = Math.cos(angle) * 1.5;
+              e.vy = Math.sin(angle) * 1.5;
             } else {
-              const strafe = angle + Math.PI / 2;
-              e.vx = Math.cos(strafe) * 1.2;
-              e.vy = Math.sin(strafe) * 1.2;
+              const strafeAngle = angle + Math.PI / 2;
+              e.vx = Math.cos(strafeAngle) * 2.0;
+              e.vy = Math.sin(strafeAngle) * 2.0;
             }
-
+            
+            e.stateTimer = (e.stateTimer || 0) - timeSpeed;
             if (e.stateTimer <= 0) {
-              e.stateTimer = 180;
-              const bombMinions = room.enemies.filter(en => en.type === 'MINION').length;
-              const canSummon = Math.max(0, 4 - bombMinions);
-              if (canSummon > 0) {
-                const spawnNum = Math.min(canSummon, 2);
-                for (let k = 0; k < spawnNum; k++) {
-                  const ba = (Math.PI * 2 / Math.max(1, spawnNum)) * k + Math.random() * 0.4;
-                  const sx = e.x + Math.cos(ba) * 40;
-                  const sy = e.y + Math.sin(ba) * 40;
-                  room.enemies.push({
-                    id: room.enemyIdCounter++, x: sx, y: sy, hp: 8, maxHp: 8, type: 'MINION',
-                    vx: 0, vy: 0, knockbackX: 0, knockbackY: 0, text: 'ERR', width: 28, height: 28, speed: 3.4, weight: 1,
-                    state: 'idle', stateTimer: 0, lastAttack: 0
-                  });
-                }
+              e.stateTimer = 120; // 2 seconds
+              const existingMinions = room.enemies.filter(en => en.type === 'MINION' && en.spawnedBy === e.id).length;
+              if (existingMinions < 4) {
+                room.enemies.push({
+                  id: room.enemyIdCounter++, x: e.x, y: e.y, hp: 10, maxHp: 10, type: 'MINION',
+                  vx: 0, vy: 0, knockbackX: 0, knockbackY: 0, text: '💣', width: 30, height: 30, speed: 3.0, weight: 1,
+                  state: 'idle', stateTimer: 0, lastAttack: 0, spawnedBy: e.id
+                });
               }
             }
           } else if (e.type === 'MINION') {
             e.vx = Math.cos(angle) * e.speed;
             e.vy = Math.sin(angle) * e.speed;
             if (minDist < 50) {
+              // Explode
               e.hp = 0;
-              room.puddles.push({ id: room.puddleIdCounter++, x: e.x, y: e.y, radius: 70, type: 'burn_slow', life: 6, maxLife: 6, damage: 0.2 });
-              if (nearestP && minDist < 70) {
-                nearestP.hp -= 2;
+              room.puddles.push({ id: room.puddleIdCounter++, x: e.x, y: e.y, radius: 80, type: 'explosion', life: 30, maxLife: 30 });
+              if (nearestP && minDist < 80) {
+                nearestP.hp -= 3;
+                nearestP.slowUntil = Date.now() + 100;
+                nearestP.slowFactor = 0.01;
               }
             }
           } else {
@@ -1519,6 +1515,7 @@ export default function App() {
           if (Math.hypot(e.x - puddle.x, e.y - puddle.y) < puddle.radius + e.width/2) {
             if (puddle.type === 'burn_slow') enemySpeedMult = Math.min(enemySpeedMult, 0.2);
             else if (puddle.type === 'formatPaint') enemySpeedMult = Math.min(enemySpeedMult, 0.4);
+            else if (puddle.type === 'slow_zone') enemySpeedMult = Math.min(enemySpeedMult, 0.1);
           }
         }
 
@@ -1570,7 +1567,7 @@ export default function App() {
                 y: e.y + Math.sin(angle) * 20,
                 hp: 15 * room.stage, maxHp: 15 * room.stage, type: 'SplitCell', text: '单元格', width: 30, height: 20, speed: 2.5,
                 vx: 0, vy: 0, knockbackX: Math.cos(angle) * 10, knockbackY: Math.sin(angle) * 10,
-                state: 'idle', stateTimer: 600, lastAttack: 0,
+                state: 'idle', stateTimer: 0, lastAttack: 0,
                 weight: 1
               });
             }
@@ -1579,8 +1576,24 @@ export default function App() {
           if ((e.type === 'Elite' && Math.random() < 0.15) || e.type === 'MiniBoss' || e.type === 'EliteBoss') {
             room.items.push({ id: room.itemIdCounter++, x: e.x, y: e.y, type: 'GridTool' });
           }
+          
+          // 死亡文字粒子
+          const deathTexts = ['DELETE', 'rm -f', 'DROP', 'TRUNCATE'];
+          const deathText = deathTexts[Math.floor(Math.random() * deathTexts.length)];
+          particles.current.push({
+            x: e.x, y: e.y,
+            vx: (Math.random() - 0.5) * 2, vy: -2 - Math.random() * 2,
+            life: 40, text: deathText, color: '#e81123', size: 16
+          });
+          
+          room.totalKills++;
           room.enemies.splice(i, 1);
         }
+      }
+
+      if (room.stage === 15 && room.bossSpawned && !room.enemies.some(e => e.type === 'EliteBoss')) {
+        room.gameOver = 'victory';
+        if (!room.endTime) room.endTime = Date.now();
       }
 
       for (let i = 0; i < room.enemies.length; i++) {
@@ -1609,59 +1622,10 @@ export default function App() {
         }
       }
 
-      if (room.stageTimer % 60 === 0) {
-        room.enemies.forEach(e => {
-          if ((e.burnStacks || 0) > 0) {
-            e.hp -= (e.burnStacks || 0) * 5;
-            if (Math.random() < 0.04) {
-              e.burnStacks = Math.max(0, (e.burnStacks || 0) - 1);
-            }
-          }
-        });
-      }
-
-      if (p && p.hp > 0 && p.specificUpgrades.includes('array_orbit')) {
-        p.orbitAngle = ((p.orbitAngle || 0) + 0.06) % (Math.PI * 2);
-        for (let oi = 0; oi < 8; oi++) {
-          const a = (p.orbitAngle || 0) + oi * Math.PI / 4;
-          const ox = p.x + Math.cos(a) * 55;
-          const oy = p.y + Math.sin(a) * 55;
-          for (const e of room.enemies) {
-            if (Math.hypot(e.x - ox, e.y - oy) < 18) {
-              e.hp -= 5;
-              const pushAngle = Math.atan2(e.y - oy, e.x - ox);
-              e.knockbackX += Math.cos(pushAngle) * 4;
-              e.knockbackY += Math.sin(pushAngle) * 4;
-            }
-          }
-        }
-      }
+      const arrayHitsThisFrame = new Map<number, number>();
 
       for (let i = room.bullets.length - 1; i >= 0; i--) {
         const b = room.bullets[i];
-        const ownerPlayer = room.players[b.owner];
-        const ownerSpecific = ownerPlayer?.specificUpgrades || [];
-
-        if (b.typewriterScale !== undefined && b.initialWidth && b.initialHeight) {
-          b.typewriterScale = Math.min(2.0, b.typewriterScale + (2.0 - 0.3) / Math.max(1, b.maxLife));
-          b.width = b.initialWidth * b.typewriterScale;
-          b.height = b.initialHeight * b.typewriterScale;
-          b.size = Math.max(b.width, b.height);
-        }
-
-        if (b.type === 'array' && ownerSpecific.includes('array_converge')) {
-          b.travelDist = (b.travelDist || 0) + Math.hypot(b.vx, b.vy);
-          if ((b.travelDist || 0) > 300 && b.initialAngle !== undefined) {
-            const curAngle = Math.atan2(b.vy, b.vx);
-            let diff = b.initialAngle - curAngle;
-            while (diff > Math.PI) diff -= Math.PI * 2;
-            while (diff < -Math.PI) diff += Math.PI * 2;
-            const spd = Math.hypot(b.vx, b.vy);
-            const newAngle = curAngle + diff * 0.04;
-            b.vx = Math.cos(newAngle) * spd;
-            b.vy = Math.sin(newAngle) * spd;
-          }
-        }
         
         if (b.trackRadius && b.trackRadius > 0) {
           let nearestE = null;
@@ -1687,35 +1651,30 @@ export default function App() {
         b.y += b.vy * timeSpeed;
         b.life -= timeSpeed;
 
-        if (b.type === 'comment' && ownerSpecific.includes('comment_proximity')) {
-          for (const e of room.enemies) {
-            if (Math.hypot(b.x - e.x, b.y - e.y) < 40) {
-              b.life = 0;
-              break;
+        if (b.type === 'wordart') {
+          const ownerPlayer = room.players[b.owner];
+          if (ownerPlayer && ownerPlayer.specificUpgrades.includes('wordart_afterimage')) {
+            if (Math.random() < 0.2) {
+              room.puddles.push({
+                id: room.puddleIdCounter++,
+                x: b.x, y: b.y,
+                radius: b.size * 0.8,
+                type: 'vulnerable',
+                life: 72, // 1.2 seconds
+                maxLife: 72,
+                owner: b.owner
+              });
             }
           }
         }
 
         if (b.life <= 0) {
           if (b.type === 'comment') {
-            const hitCount = room.enemies.filter(e => Math.hypot(e.x - b.x, e.y - b.y) < (b.explosionRadius || 70) + e.width/2).length;
-            const densityMult = ownerSpecific.includes('comment_density') ? (1 + Math.min(5, Math.max(0, hitCount - 1)) * 0.15) : 1;
-
             room.enemies.forEach(e => {
               if (Math.hypot(e.x - b.x, e.y - b.y) < (b.explosionRadius || 70) + e.width/2) {
                 let finalDamage = b.damage;
-                finalDamage *= densityMult;
                 if (e.type === 'EliteBoss' || e.type === 'MiniBoss' || e.type === 'Elite') {
                   finalDamage *= (b.eliteDamageMult || 1);
-                }
-
-                if (e.commentMark && Date.now() < e.commentMark) {
-                  finalDamage *= 1.8;
-                  e.commentMark = 0;
-                }
-
-                if (e.revisionMark && Date.now() < e.revisionMark) {
-                  finalDamage *= 1.35;
                 }
                 
                 if (b.isSuper && e.type !== 'EliteBoss' && e.type !== 'MiniBoss') {
@@ -1728,63 +1687,54 @@ export default function App() {
                 const angle = Math.atan2(e.y - b.y, e.x - b.x);
                 let kbResist = e.isBuffed ? 0.2 : 0.8;
                 kbResist /= (e.weight || 1);
-                const explosionKb = b.knockback || 15;
-                e.vx += Math.cos(angle) * explosionKb * kbResist;
-                e.vy += Math.sin(angle) * explosionKb * kbResist;
+                const kbForce = 15 * (b.knockbackMult || 1);
+                e.vx += Math.cos(angle) * kbForce * kbResist;
+                e.vy += Math.sin(angle) * kbForce * kbResist;
                 
                 // comment_chain logic
-                if (e.hp <= 0) {
+                if (e.hp <= 0 && !b.chainDepth) {
                   const ownerPlayer = room.players[b.owner];
                   if (ownerPlayer && ownerPlayer.specificUpgrades.includes('comment_chain') && Math.random() < 0.5) {
-                    if ((b.chainDepth || 0) < 3) { // Limit chain depth to prevent infinite loops
-                      room.bullets.push({
-                        ...b,
-                        id: room.bulletIdCounter++,
-                        x: e.x, y: e.y,
-                        life: 0, // Explode immediately next frame
-                        maxLife: 0,
-                        damage: b.damage * 0.5,
-                        explosionRadius: (b.explosionRadius || 70) * 0.8,
-                        splitsLeft: 0,
-                        chainDepth: (b.chainDepth || 0) + 1,
-                        hitTargets: new Set()
-                      });
-                    }
+                    room.bullets.push({
+                      ...b,
+                      id: room.bulletIdCounter++,
+                      x: e.x, y: e.y,
+                      life: 0, // Explode immediately next frame
+                      maxLife: 0,
+                      damage: b.damage * 0.5,
+                      explosionRadius: b.explosionRadius || 70,
+                      splitsLeft: 0,
+                      chainDepth: 1,
+                      hitTargets: new Set()
+                    });
                   }
                 }
               }
             });
-
-            if (ownerSpecific.includes('comment_mark')) {
-              room.enemies.forEach(e => {
-                if (e.hp > 0 && Math.hypot(e.x - b.x, e.y - b.y) < (b.explosionRadius || 70) + e.width/2) {
-                  e.commentMark = Date.now() + 4000;
-                }
-              });
-            }
-
-            if (hitCount > 0 && ownerSpecific.includes('comment_battery') && ownerPlayer) {
-              ownerPlayer.hp = Math.min(ownerPlayer.maxHp, ownerPlayer.hp + ownerPlayer.maxHp * 0.02);
-            }
             
             // Visual explosion puddle
             room.puddles.push({
               id: room.puddleIdCounter++, x: b.x, y: b.y, radius: b.explosionRadius || 70, type: 'explosion', life: 30, maxLife: 30, damage: 0, owner: b.owner
             });
             
+            const ownerPlayer = room.players[b.owner];
+            const hasResidue = ownerPlayer && ownerPlayer.specificUpgrades.includes('comment_residue');
+            const puddleRadius = (b.explosionRadius || 70) * 0.8 * (hasResidue ? 1.4 : 1);
+            const puddleDamage = (b.damage * 0.2) + (hasResidue ? 8/6 : 0);
+
             // Lingering effect puddle
             if (!b.isSuper && !b.leavesResidue) {
               room.puddles.push({
-                id: room.puddleIdCounter++, x: b.x, y: b.y, radius: (b.explosionRadius || 70) * 0.8, type: 'highlight', life: 180, maxLife: 180, damage: b.damage * 0.2, owner: b.owner
+                id: room.puddleIdCounter++, x: b.x, y: b.y, radius: puddleRadius, type: 'highlight', life: 180, maxLife: 180, damage: puddleDamage, owner: b.owner
               });
             }
             
             if (b.isSuper || b.leavesResidue) { // comment_black or underline
               room.puddles.push({
-                id: room.puddleIdCounter++, x: b.x, y: b.y, radius: (b.explosionRadius || 70) * 1.15, type: 'burn_slow', life: 360, maxLife: 360, damage: b.damage * 0.14, owner: b.owner //保留
+                id: room.puddleIdCounter++, x: b.x, y: b.y, radius: puddleRadius, type: 'burn_slow', life: 300, maxLife: 300, damage: b.damage * 0.1 + (hasResidue ? 8/6 : 0), owner: b.owner
               });
               room.puddles.push({
-                id: room.puddleIdCounter++, x: b.x, y: b.y, radius: (b.explosionRadius || 70) * 0.8, type: 'blacken', life: 600, maxLife: 600, damage: 0, owner: b.owner
+                id: room.puddleIdCounter++, x: b.x, y: b.y, radius: puddleRadius, type: 'blacken', life: 600, maxLife: 600, damage: 0, owner: b.owner
               });
             }
             
@@ -1827,18 +1777,8 @@ export default function App() {
           if (!b.isBulldozer && b.hitTargets && b.hitTargets.has(e.id)) continue;
 
           let isHit = false;
-          if (b.type === 'wordart' && b.width && b.height && b.angle !== undefined) { //保留
-            const dx = e.x - b.x;
-            const dy = e.y - b.y;
-            const cos = Math.cos(-b.angle);
-            const sin = Math.sin(-b.angle);
-            const rx = dx * cos - dy * sin;
-            const ry = dx * sin + dy * cos;
-
-            if (Math.abs(rx) < b.width/2 + e.width/2 && Math.abs(ry) < b.height/2 + e.height/2) {
-              isHit = true;
-            }
-          } else if (b.type === 'wordart' && b.width && b.height) {
+          if (b.type === 'wordart' && b.width && b.height) {
+            // WordArt is always horizontal now, so simple AABB collision
             if (Math.abs(b.x - e.x) < b.width/2 + e.width/2 && Math.abs(b.y - e.y) < b.height/2 + e.height/2) {
               isHit = true;
             }
@@ -1892,20 +1832,12 @@ export default function App() {
                 finalDamage *= (b.eliteDamageMult || 1);
               }
 
-              if (e.revisionMark && Date.now() < e.revisionMark) {
-                finalDamage *= 1.35;
-              }
-
               const inHighlight = room.puddles.some(p => p.type === 'highlight' && Math.hypot(e.x - p.x, e.y - p.y) < p.radius + e.width/2);
               if (inHighlight) {
                 finalDamage *= 1.5;
               }
 
               e.hp -= finalDamage;
-
-              if (b.type === 'wordart' && ownerSpecific.includes('wordart_revision') && (e.type === 'Elite' || e.type === 'MiniBoss' || e.type === 'EliteBoss')) {
-                e.revisionMark = Date.now() + 5000;
-              }
               
               if (b.isStrikethrough && e.hp > 0 && e.hp / e.maxHp <= 0.2 && e.type !== 'EliteBoss' && e.type !== 'MiniBoss') {
                 e.hp = 0;
@@ -1919,16 +1851,6 @@ export default function App() {
                 e.state = 'stunned';
                 e.stateTimer = 60; // 1s
               }
-
-              if (e.hp <= 0 && b.type === 'array' && ownerSpecific.includes('array_ricochet')) {
-                b.ricochetPierce = Math.min(3, (b.ricochetPierce || 0) + 1);
-                b.pierce += 1;
-                const spd = Math.hypot(b.vx, b.vy) || 1;
-                const baseSpd = b.ricochetSpeed || spd;
-                const newSpd = Math.min(spd * 1.2, baseSpd * Math.pow(1.2, 3));
-                b.vx = (b.vx / spd) * newSpd;
-                b.vy = (b.vy / spd) * newSpd;
-              }
               
               shake.current = Math.max(shake.current, 2);
               
@@ -1940,11 +1862,8 @@ export default function App() {
                 });
               }
               
-              let dmgText = `-${Math.floor(finalDamage)}${b.isCrit ? '!' : ''}`;
-              if (finalDamage >= 100) {
-                const hex = Math.floor(finalDamage).toString(16).toUpperCase();
-                dmgText = b.isCrit ? `CRIT:0x${hex}!!` : `-0x${hex}`;
-              }
+              const hex = Math.floor(finalDamage).toString(16).toUpperCase();
+              let dmgText = b.isCrit ? `!!0x${hex}` : `0x${hex}`;
               
               particles.current.push({
                 x: e.x + (Math.random()-0.5)*30, y: e.y + (Math.random()-0.5)*30,
@@ -1963,6 +1882,22 @@ export default function App() {
                   id: room.puddleIdCounter++, x: e.x, y: e.y, radius: 60, type: 'formatPaint', life: 200, maxLife: 200, damage: b.damage * 0.2, owner: b.owner
                 });
               }
+
+              if (b.type === 'array' && ownerPlayer && ownerPlayer.specificUpgrades.includes('array_overload')) {
+                const hits = (arrayHitsThisFrame.get(e.id) || 0) + 1;
+                arrayHitsThisFrame.set(e.id, hits);
+                if (hits === 3) {
+                  room.puddles.push({
+                    id: room.puddleIdCounter++, x: e.x, y: e.y, radius: 100, type: 'explosion', life: 30, maxLife: 30, damage: b.damage * 2, owner: b.owner
+                  });
+                  // Apply explosion damage immediately
+                  for (const target of room.enemies) {
+                    if (target.hp > 0 && Math.hypot(target.x - e.x, target.y - e.y) < 100 + target.width/2) {
+                      target.hp -= b.damage * 2;
+                    }
+                  }
+                }
+              }
             }
 
             if (b.isBulldozer && e.type !== 'EliteBoss' && e.type !== 'MiniBoss') {
@@ -1978,6 +1913,31 @@ export default function App() {
                 e.y += (b.y - e.y) * 0.2;
               } else {
                 e.x += (b.x - e.x) * 0.2;
+              }
+
+              const ownerPlayer = room.players[b.owner];
+              if (ownerPlayer && ownerPlayer.specificUpgrades.includes('wordart_momentum')) {
+                if (e.lastPushedBy !== b.id) {
+                  e.lastPushedBy = b.id;
+                  e.pushedDistance = 0;
+                  e.pushDamageCount = 0;
+                }
+                const dist = Math.hypot(e.x - prevX, e.y - prevY);
+                e.pushedDistance = (e.pushedDistance || 0) + dist;
+                
+                if (e.pushedDistance >= 100 && (e.pushDamageCount || 0) < 4) {
+                  e.pushedDistance -= 100;
+                  e.pushDamageCount = (e.pushDamageCount || 0) + 1;
+                  const extraDamage = b.damage * 0.15;
+                  e.hp -= extraDamage;
+                  
+                  const hex = Math.floor(extraDamage).toString(16).toUpperCase();
+                  particles.current.push({
+                    x: e.x + (Math.random()-0.5)*30, y: e.y + (Math.random()-0.5)*30,
+                    vx: (Math.random()-0.5)*6, vy: (Math.random()-0.5)*6 - 2,
+                    life: 30 + Math.random()*20, text: `+0x${hex}`, color: '#ff8800'
+                  });
+                }
               }
               
               let atWall = false;
@@ -2005,9 +1965,6 @@ export default function App() {
                       });
                     } else {
                       e.hp = 0;
-                      if (ownerSpecific.includes('wordart_hotkey') && ownerPlayer) {
-                        ownerPlayer.lastShot = 0;
-                      }
                       shake.current = Math.max(shake.current, 10);
                       const deathTexts = ['DELETE', 'KILL', 'GG.EXE'];
                       for(let i=0; i<5; i++) {
@@ -2097,34 +2054,6 @@ export default function App() {
                 b.life = 0;
               }
 
-              if (b.type === 'array' && ownerSpecific.includes('array_scatter')) {
-                for (let si = 0; si < 2; si++) {
-                  const a = Math.random() * Math.PI * 2;
-                  room.bullets.push({
-                    id: room.bulletIdCounter++,
-                    owner: b.owner,
-                    x: b.x, y: b.y,
-                    vx: Math.cos(a) * 10,
-                    vy: Math.sin(a) * 10,
-                    damage: b.damage * 0.3,
-                    size: b.size * 0.6,
-                    pierce: 1,
-                    life: 500,
-                    maxLife: 500,
-                    type: 'array',
-                    isCrit: false,
-                    eliteDamageMult: b.eliteDamageMult || 1,
-                    splitsLeft: 0,
-                    bouncesLeft: 0,
-                    trackRadius: 0,
-                    isHighlight: false,
-                    leavesResidue: false,
-                    isItalic: false,
-                    isStrikethrough: false
-                  });
-                }
-              }
-
               b.pierce--;
               hitEnemy = true;
               if (!b.isBulldozer) break;
@@ -2138,19 +2067,7 @@ export default function App() {
           }
         } else if ((!b.isBulldozer && checkObstacleCollision(b.x, b.y, b.size, b.size)) || 
             b.x < -100 || b.x > currentMap.width + 100 || b.y < -100 || b.y > currentMap.height + 100) {
-          if (b.type === 'comment' && ownerSpecific.includes('comment_wallbounce') && !b.wallBounced) { //保留
-            const outX = b.x < 0 || b.x > currentMap.width;
-            const outY = b.y < 0 || b.y > currentMap.height;
-            if (outX) b.vx *= -1;
-            if (outY) b.vy *= -1;
-            if (!outX && !outY) {
-              if (Math.abs(b.vx) > Math.abs(b.vy)) b.vx *= -1;
-              else b.vy *= -1;
-            }
-            b.wallBounced = true;
-          } else {
-            b.life = 0;
-          }
+          b.life = 0;
         }
       }
 
@@ -2168,18 +2085,7 @@ export default function App() {
         let blocked = false;
         for (const b of room.bullets) {
           if (b.type === 'wordart' && b.isShield && b.width && b.height) {
-            if (b.angle !== undefined) { //保留
-              const dx = eb.x - b.x;
-              const dy = eb.y - b.y;
-              const cos = Math.cos(-b.angle);
-              const sin = Math.sin(-b.angle);
-              const rx = dx * cos - dy * sin;
-              const ry = dx * sin + dy * cos;
-              if (Math.abs(rx) < (b.width/2 + eb.size) && Math.abs(ry) < (b.height/2 + eb.size)) {
-                blocked = true;
-                break;
-              }
-            } else if (Math.abs(eb.x - b.x) < (b.width/2 + eb.size) && Math.abs(eb.y - b.y) < (b.height/2 + eb.size)) {
+            if (Math.abs(eb.x - b.x) < (b.width/2 + eb.size) && Math.abs(eb.y - b.y) < (b.height/2 + eb.size)) {
               blocked = true;
               break;
             }
@@ -2271,34 +2177,8 @@ export default function App() {
             l.hitTargets.add(e.id);
             
             let finalDamage = l.damage;
-            const laserOwner = room.players[l.owner];
-            const laserSpecific = laserOwner?.specificUpgrades || [];
-
-            if (laserOwner?.killshotUntil && Date.now() < laserOwner.killshotUntil) {
-              finalDamage *= 3;
-              laserOwner.killshotUntil = 0;
-            }
             if (e.type === 'EliteBoss' || e.type === 'MiniBoss' || e.type === 'Elite') {
               finalDamage *= (l.eliteDamageMult || 1);
-            }
-
-            if (e.revisionMark && Date.now() < e.revisionMark) {
-              finalDamage *= 1.35;
-            }
-
-            if (laserSpecific.includes('sparkline_execute') && e.hp / e.maxHp < 0.25 && e.type !== 'EliteBoss' && e.type !== 'MiniBoss') {
-              finalDamage *= 3;
-            }
-
-            if (laserSpecific.includes('sparkline_tenshot')) {
-              laserOwner!.lasersHit = (laserOwner!.lasersHit || 0) + 1;
-              if ((laserOwner!.lasersHit || 0) % 10 === 0) {
-                laserOwner!.nextLaserCrit = true;
-              }
-              if (laserOwner!.nextLaserCrit) {
-                finalDamage *= 3;
-                laserOwner!.nextLaserCrit = false;
-              }
             }
             
             // Highlight vulnerability
@@ -2308,10 +2188,6 @@ export default function App() {
             }
             
             e.hp -= finalDamage;
-
-            if (laserSpecific.includes('sparkline_burn')) {
-              e.burnStacks = Math.min(8, (e.burnStacks || 0) + 1);
-            }
             
             // Strikethrough execute
             if (l.isStrikethrough && e.hp > 0 && e.hp / e.maxHp <= 0.2 && e.type !== 'EliteBoss' && e.type !== 'MiniBoss') {
@@ -2324,10 +2200,6 @@ export default function App() {
             
             if (l.isCannon && e.type !== 'EliteBoss' && e.type !== 'MiniBoss') {
               e.hp = 0;
-            }
-
-            if (e.hp <= 0 && laserSpecific.includes('sparkline_killshot')) {
-              laserOwner!.killshotUntil = Date.now() + 300;
             }
             
             if (e.hp > 0 && l.stunChance && Math.random() < l.stunChance) {
@@ -2342,11 +2214,8 @@ export default function App() {
             
             shake.current = Math.max(shake.current, 1);
             
-            let dmgText = `-${Math.floor(finalDamage)}${l.isCrit ? '!' : ''}`;
-            if (finalDamage >= 100) {
-              const hex = Math.floor(finalDamage).toString(16).toUpperCase();
-              dmgText = l.isCrit ? `CRIT:0x${hex}!!` : `-0x${hex}`;
-            }
+            const hex = Math.floor(finalDamage).toString(16).toUpperCase();
+            let dmgText = l.isCrit ? `!!0x${hex}` : `0x${hex}`;
             
             particles.current.push({
               x: e.x + (Math.random()-0.5)*30, y: e.y + (Math.random()-0.5)*30,
@@ -2415,41 +2284,120 @@ export default function App() {
 
   const handleGridAction = (type: 'area' | 'row' | 'col') => {
     if (!selectionStartRef.current || !selectionEndRef.current || !gameStateRef.current) return;
+    
+    const room = gameStateRef.current;
+    const me = room.players[myId];
+    if (!me) return;
+    
     const canvas = canvasRef.current;
     if (!canvas) return;
+    
+    const SCALE = 0.6;
+    const cameraX = me.x - canvas.width / (2 * SCALE);
+    const cameraY = me.y - canvas.height / (2 * SCALE);
+    
+    const worldStartX = selectionStartRef.current.x / SCALE + cameraX;
+    const worldStartY = selectionStartRef.current.y / SCALE + cameraY;
+    const worldEndX = selectionEndRef.current.x / SCALE + cameraX;
+    const worldEndY = selectionEndRef.current.y / SCALE + cameraY;
+    
+    const x = Math.min(worldStartX, worldEndX);
+    const y = Math.min(worldStartY, worldEndY);
+    const w = Math.abs(worldEndX - worldStartX);
+    const h = Math.abs(worldEndY - worldStartY);
+    
+    room.bulletTime = 0;
+    let hitCount = 0;
+    room.enemies.forEach(e => {
+      let hit = false;
+      if (type === 'area') {
+        if (e.x > x && e.x < x + w && e.y > y && e.y < y + h) hit = true;
+      } else if (type === 'row') {
+        if (e.y > y && e.y < y + h) hit = true;
+      } else if (type === 'col') {
+        if (e.x > x && e.x < x + w) hit = true;
+      }
 
-    applyGridAction(type, {
-      room: gameStateRef.current,
-      myId,
-      canvas,
-      selectionStart: selectionStartRef.current,
-      selectionEnd: selectionEndRef.current,
-      setShowGridMenu,
-      isSelectingGridRef,
-      selectionStartRef,
-      selectionEndRef,
-      shake
+      if (hit) {
+        if (e.type === 'EliteBoss' || e.type === 'MiniBoss') {
+        e.hp -= Math.min(e.maxHp / 3, e.hp - 1);
+      } else {
+        e.hp -= 99999;
+      }
+        hitCount++;
+      }
     });
+    
+    if (hitCount > 0) {
+      shake.current = 30;
+    }
+    
+    setShowGridMenu(false);
+    isSelectingGridRef.current = false;
+    selectionStartRef.current = null;
+    selectionEndRef.current = null;
   };
 
   const handleSelectUpgrade = (upgrade: Upgrade) => {
     const room = gameStateRef.current;
     if (!room) return;
+    
+    const p = room.players[myId];
+    if (p) {
+      if (['bold', 'underline', 'highlight', 'rand', 'vlookup', 'sum', 'italic', 'strikethrough', 'ctrl_c', 'ctrl_z', 'format_painter'].includes(upgrade)) {
+        if (!p.generalUpgrades.includes(upgrade as GeneralUpgrade)) {
+          p.generalUpgrades.push(upgrade as GeneralUpgrade);
+        }
+      } else {
+        if (!p.specificUpgrades.includes(upgrade as SpecificUpgrade)) {
+          p.specificUpgrades.push(upgrade as SpecificUpgrade);
+        }
+      }
+      
+      p.upgradesToChoose = (p.upgradesToChoose || 1) - 1;
+      
+      if (p.upgradesToChoose > 0 && room.skillChoices.length > 0) {
+        setUiState(prev => prev ? { ...prev, skillChoices: room.skillChoices } : null);
+        return;
+      }
+    }
+    
+    p.readyForNextStage = true;
 
-    applySelectedUpgrade(upgrade, {
-      room,
-      myId,
-      totalStages: TOTAL_STAGES,
-      setFinalScore,
-      setIsCleared,
-      setUiState
-    });
+    room.isSelectingSkill = false;
+    room.stage++;
+    room.stageTimer = 0;
+    room.bossSpawned = false;
+    
+    if (room.stage <= 15) {
+      room.enemies = []; 
+      room.bullets = [];
+      room.puddles = [];
+      room.enemyBullets = [];
+      room.aoeWarnings = [];
+      room.lasers = [];
+      room.items = [];
+      room.dynamicObstacles = [];
+      
+      const currentMap = MAPS[Math.min(room.stage - 1, MAPS.length - 1)];
+      p.x = currentMap.playerSpawn.x;
+      p.y = currentMap.playerSpawn.y;
+    }
+    p.readyForNextStage = false;
+    setUiState(prev => prev ? { ...prev, isSelectingSkill: false } : null);
   };
 
   const handleSelectForm = (form: AttackForm) => {
     const room = gameStateRef.current;
     if (!room) return;
-    applySelectedForm(room, myId, form, setUiState);
+    
+    const p = room.players[myId];
+    if (p) {
+      p.attackForm = form;
+    }
+    
+    room.isSelectingForm = false;
+    setUiState(prev => prev ? { ...prev, isSelectingForm: false } : null);
   };
 
   // Canvas Render Loop
@@ -2463,8 +2411,14 @@ export default function App() {
     if (!ctx) return;
 
     const render = () => {
+      const cnFont = (size: number) =>
+        `bold ${size}px "Microsoft YaHei UI","微软雅黑","PingFang SC",sans-serif`;
+      const codeFont = (size: number) =>
+        `${size}px Consolas,"Courier New",monospace`;
+      const boldCode = (size: number) =>
+        `bold ${size}px Consolas,"Courier New",monospace`;
+
       const gameState = gameStateRef.current;
-      const renderNow = Date.now();
       
       if (canvas.width !== container.clientWidth || canvas.height !== container.clientHeight) {
         canvas.width = container.clientWidth;
@@ -2477,7 +2431,7 @@ export default function App() {
       }
 
       const me = gameState.players[myId];
-      const SCALE = 0.8;
+      const SCALE = 0.6;
       
       let bgColor = '#ffffff';
       let gridColor = '#e1dfdd';
@@ -2641,465 +2595,505 @@ export default function App() {
 
       gameState.puddles?.forEach((p: any) => {
         if (!isVisible(p.x - p.radius, p.y - p.radius, p.radius * 2, p.radius * 2)) return;
-        
-        if (p.type === 'explosion') {
-          const progress = 1 - (p.life / p.maxLife);
-          const alpha = p.life / p.maxLife;
-          const explosionChars = ['#REF!', '#VALUE!', '#NULL!', 'ERR', '{}', '[[]]', 'NaN', '0xFF', 'SIGSEGV', 'OVERFLOW'];
+        const now = Date.now();
+        const lifeRatio = p.life / p.maxLife;
+        const alpha = Math.min(1, lifeRatio * 3); // Fade out at end
 
+        if (p.type === 'explosion') {
+          // 爆炸：同心圆旋转乱码
           ctx.save();
           ctx.translate(p.x, p.y);
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-
-          const rings = 5;
-          for (let r = 0; r < rings; r++) {
-            const ringProgress = (r + 1) / rings;
-            const ringRadius = p.radius * (0.18 + ringProgress * 0.92) * progress;
-            const charCount = Math.min(52, Math.max(8, Math.floor(ringRadius / 7) + r * 4));
-            const fontSize = Math.max(9, 24 - r * 3.2);
-            const wobble = 2.2 + r * 0.7;
-            ctx.font = `bold ${fontSize}px monospace`;
-            const ringAlpha = alpha * (1 - r * 0.14);
-
-            for (let i = 0; i < charCount; i++) {
-              const t = i / charCount;
-              const angle = t * Math.PI * 2 + renderNow * (0.0014 + r * 0.00025);
-              const pulse = Math.sin(renderNow * 0.01 + i * 0.8 + r) * wobble;
-              const rr = ringRadius + pulse;
-              const cx = Math.cos(angle) * rr;
-              const cy = Math.sin(angle) * rr;
-              const token = explosionChars[(i + r + Math.floor(renderNow / 70)) % explosionChars.length];
-
+          ctx.globalAlpha = alpha;
+          const errTexts = ['#REF!','#VALUE!','#DIV/0!','#NAME?','#NUM!'];
+          const t = now * 0.002;
+          for (let r = 1; r <= 3; r++) {
+            const rad = p.radius * (r / 3);
+            const count = r * 4;
+            ctx.font = boldCode(10 + r*2);
+            ctx.fillStyle = r % 2 === 0 ? '#f85149' : '#d29922';
+            for (let i = 0; i < count; i++) {
+              const angle = (i / count) * Math.PI * 2 + t * (r % 2 === 0 ? 1 : -1);
               ctx.save();
-              ctx.translate(cx, cy);
-              ctx.rotate(angle + Math.PI / 2 + Math.sin(renderNow * 0.004 + i) * 0.15);
-              ctx.fillStyle = `rgba(${255 - r * 18}, ${120 - r * 10}, ${40 + r * 16}, ${Math.max(0.05, ringAlpha * (0.72 - t * 0.18))})`;
-              ctx.fillText(token, 0, 0);
+              ctx.translate(Math.cos(angle)*rad, Math.sin(angle)*rad);
+              ctx.rotate(angle + Math.PI/2);
+              ctx.fillText(errTexts[(i+r)%errTexts.length], 0, 0);
               ctx.restore();
             }
           }
           ctx.restore();
+
         } else if (p.type === 'highlight' || p.type === 'burn_slow') {
+          // 矩阵字符雨效果
           ctx.save();
+          ctx.globalAlpha = alpha * 0.6;
+          ctx.fillStyle = p.type === 'highlight' ? '#ffb900' : '#e81123';
           ctx.beginPath();
           ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+          ctx.fill();
+          
           ctx.clip();
-          
-          const alpha = p.life / p.maxLife;
-          ctx.fillStyle = p.type === 'highlight' ? `rgba(154, 205, 50, ${0.3 * alpha})` : `rgba(255, 69, 0, ${0.4 * alpha})`;
-          ctx.fill(); // Base background
-          
-          ctx.fillStyle = p.type === 'highlight' ? `rgba(154, 205, 50, ${0.6 * alpha})` : `rgba(255, 69, 0, ${0.8 * alpha})`;
-          ctx.font = '12px monospace';
+          ctx.font = codeFont(12);
+          ctx.fillStyle = p.type === 'highlight' ? '#a4262c' : '#ffffff';
+          ctx.textAlign = 'center';
+          const dropCount = Math.floor(p.radius / 8);
+          for (let i = -dropCount; i <= dropCount; i++) {
+            const x = p.x + i * 15;
+            const speed = 20 + (Math.abs(i) % 3) * 10;
+            const yOffset = (now / speed) % (p.radius * 2);
+            const char = '01NaNnull{}[]()=>undefinedvoid0xFFerr%$#@!'[(Math.floor(now/100)+i+dropCount)%42];
+            ctx.fillText(char, x, p.y - p.radius + yOffset);
+          }
+          ctx.restore();
+
+        } else if (p.type === 'formatPaint') {
+          ctx.save();
+          ctx.globalAlpha = alpha * 0.5;
+          ctx.fillStyle = '#107c41';
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.font = cnFont(24);
+          ctx.fillStyle = '#ffffff';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          
-          const matrixChars = '01';
-          const scrollY = (renderNow * 0.05) % 20;
-          
-          for (let mx = -p.radius; mx <= p.radius; mx += 15) {
-            for (let my = -p.radius - 20; my <= p.radius; my += 20) {
-              const char = matrixChars[Math.floor(Math.abs(mx * my + renderNow*0.001)) % matrixChars.length];
-              ctx.fillText(char, p.x + mx, p.y + my + scrollY);
-            }
-          }
-          
+          ctx.fillText('🖌️', p.x, p.y);
           ctx.restore();
-        } else {
+
+        } else if (p.type === 'blacken') {
+          ctx.save();
+          ctx.globalAlpha = alpha * 0.8;
+          ctx.fillStyle = '#000000';
           ctx.beginPath();
           ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-          if (p.type === 'formatPaint') {
-            ctx.fillStyle = `rgba(255, 200, 0, ${Math.min(0.4, p.life / 500)})`;
-            ctx.fill();
-            ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(0.5, p.life / 500)})`;
-            ctx.font = '12px Calibri';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('🖌️', p.x, p.y);
-          } else if (p.type === 'blacken') {
-            ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(0.8, p.life / 600)})`;
-            ctx.fill();
-          }
+          ctx.fill();
+          ctx.restore();
         }
+      });
+
+      gameState.enemies?.forEach((e: any) => {
+        // Removed FreezeCell aura rendering
       });
 
       gameState.enemyBullets?.forEach((eb: any) => {
         if (!isVisible(eb.x - eb.size, eb.y - eb.size, eb.size * 2, eb.size * 2)) return;
-        ctx.save();
-        ctx.translate(eb.x, eb.y);
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-
-        const hostileTokens: Record<string, string[]> = {
-          value: ['#VALUE!', 'NaN', 'TypeError'],
-          row: ['<ROW/>', '////', '===>'],
-          col: ['<COL/>', '||||', '::'],
-          ref: ['#REF!', '?', 'NULL'],
-          vlookup: ['VLOOKUP', '=>', 'MISS']
-        };
-        const seq = hostileTokens[eb.type] || ['ERR'];
-        const token = seq[Math.floor((renderNow / 40 + eb.id) % seq.length)];
-        const alpha = Math.max(0.35, eb.life / 300);
-
-        ctx.fillStyle = `rgba(255, 70, 70, ${alpha})`;
-        ctx.font = `bold ${Math.max(12, eb.size * 1.4)}px monospace`;
-
-        for (let lane = -1; lane <= 1; lane++) {
-          const yJitter = Math.sin(renderNow * 0.02 + eb.id + lane) * 2;
-          ctx.fillText(token, 0, lane * 10 + yJitter);
+        if (eb.type === 'value') {
+          ctx.fillStyle = '#e81123';
+          ctx.font = 'bold 14px Calibri';
+          ctx.fillText('#VALUE!', eb.x, eb.y);
+        } else if (eb.type === 'row') {
+          ctx.fillStyle = '#e81123';
+          ctx.font = 'bold 14px Calibri';
+          ctx.fillText('#REF!', eb.x, eb.y);
+        } else if (eb.type === 'col') {
+          ctx.fillStyle = '#e81123';
+          ctx.font = 'bold 14px Calibri';
+          ctx.fillText('#N/A', eb.x, eb.y);
+        } else {
+          ctx.fillStyle = '#e81123';
+          ctx.font = `bold ${eb.size * 2}px Consolas`;
+          const char = eb.type === 'ref' ? '?' : (eb.type === 'vlookup' ? '§' : '*');
+          ctx.fillText(char, eb.x, eb.y);
         }
+      });
 
-        ctx.restore();
+      gameState.items?.forEach((item: any) => {
+        if (!isVisible(item.x - 15, item.y - 15, 30, 30)) return;
+        ctx.fillStyle = 'rgba(0, 120, 215, 0.2)';
+        ctx.fillRect(item.x - 15, item.y - 15, 30, 30);
+        ctx.strokeStyle = '#0078d7';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 2]);
+        ctx.strokeRect(item.x - 15, item.y - 15, 30, 30);
+        ctx.setLineDash([]);
       });
 
       gameState.enemies?.forEach((e: any) => {
         if (!isVisible(e.x - e.width/2, e.y - e.height/2, e.width, e.height)) return;
-
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
+        const now = Date.now();
 
+        // ── FormatBrush 冲刺预警线（保留现有逻辑，只改颜色） ──
         if (e.type === 'FormatBrush' && e.state === 'warning') {
           ctx.beginPath();
           ctx.moveTo(e.x, e.y);
           ctx.lineTo(e.dashTargetX || e.x, e.dashTargetY || e.y);
-          ctx.strokeStyle = 'rgba(255, 90, 90, 0.65)';
+          ctx.strokeStyle = 'rgba(248,81,73,0.5)';
           ctx.lineWidth = 3;
-          ctx.setLineDash([8, 6]);
+          ctx.setLineDash([8, 8]);
           ctx.stroke();
           ctx.setLineDash([]);
         }
 
-        if (e.type === 'ProtectedView' && e.facingAngle !== undefined) {
-          ctx.beginPath();
-          ctx.arc(e.x, e.y, e.width/2 + 10, e.facingAngle - Math.PI/4, e.facingAngle + Math.PI/4);
-          ctx.strokeStyle = '#00a2ed';
-          ctx.lineWidth = 3;
-          ctx.stroke();
-        }
+        if (e.type === 'Minion') {
+          // 单个大字：误
+          ctx.font = cnFont(17);
+          ctx.fillStyle = '#555555';
+          ctx.fillText('误', e.x, e.y);
 
-        const phase = renderNow * 0.002 + e.id;
-        const baseColorMap: Record<string, string> = {
-          Minion: '#a0a0a0',
-          Elite: '#ff5a5a',
-          MiniBoss: '#ffd166',
-          EliteBoss: '#ff355e',
-          Value: '#ff8a3d',
-          FormatBrush: '#ffd43b',
-          FreezeCell: '#59d8ff',
-          ProtectedView: '#3ecf8e',
-          MergedCell: '#b892ff',
-          SplitCell: '#ff70d8',
-          REF: '#ff3b3b',
-          VLOOKUP: '#4aa8ff',
-          MACRO: '#43d17a',
-          MINION: '#ff8080'
-        };
+        } else if (e.type === 'Elite') {
+          // 背景框
+          ctx.fillStyle = 'rgba(248,81,73,0.10)';
+          ctx.fillRect(e.x - e.width/2, e.y - e.height/2, e.width, e.height);
+          const alpha = 0.55 + 0.45 * Math.sin(now / 180);
+          ctx.strokeStyle = `rgba(248,81,73,${alpha})`;
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(e.x - e.width/2, e.y - e.height/2, e.width, e.height);
+          // 乱码文字，每500ms切换
+          const elitePool = ['烫烫','锟斤拷','乱码','异常'];
+          ctx.font = cnFont(15);
+          ctx.fillStyle = '#f85149';
+          ctx.fillText(elitePool[Math.floor(now/500 + e.id) % elitePool.length], e.x, e.y);
 
-        let tokenPool = ['NULL', 'NaN', '{}'];
-        if (e.type === 'Minion') tokenPool = ['lorem', 'var', 'tmp', 'obj'];
-        else if (e.type === 'Elite') tokenPool = ['ERR', 'panic!', 'stack'];
-        else if (e.type === 'MiniBoss') tokenPool = ['TODO', 'FIXME', 'REWORK'];
-        else if (e.type === 'EliteBoss') tokenPool = ['{', '}', '<', '>', '/', '\\', '0', '1', 'x', '=', '?', '#'];
-        else if (e.type === 'Value') tokenPool = ['#N/A', '#VALUE!', 'NaN'];
-        else if (e.type === 'FormatBrush') tokenPool = ['paint()', 'fmt', '{style}'];
-        else if (e.type === 'FreezeCell') tokenPool = ['const', 'let', 'lock'];
-        else if (e.type === 'ProtectedView') tokenPool = ['readonly', 'shield', 'perm'];
-        else if (e.type === 'MergedCell') tokenPool = ['merge', '[][]', '<td>'];
-        else if (e.type === 'SplitCell') tokenPool = ['split', '::', '..'];
-        else if (e.type === 'REF') tokenPool = ['#REF!', '?', 'dangling'];
-        else if (e.type === 'VLOOKUP') tokenPool = ['VLOOKUP', 'index', 'find'];
-        else if (e.type === 'MACRO') tokenPool = ['macro()', 'exec', 'virus'];
-        else if (e.type === 'MINION') tokenPool = ['ERR', 'bomb()', '!!'];
+        } else if (e.type === 'MINION') {
+          // 爆炸小怪，接近时加速闪烁
+          const fastFlash = Math.floor(now / 90 + e.id) % 2 === 0;
+          ctx.font = cnFont(15);
+          ctx.fillStyle = fastFlash ? '#f85149' : '#d29922';
+          ctx.fillText('炸', e.x, e.y);
 
-        const baseColor = baseColorMap[e.type] || '#cccccc';
-
-        if (e.type === 'EliteBoss') {
-          ctx.save();
-          ctx.translate(e.x, e.y);
-          ctx.globalAlpha = 0.9;
-          const layers = 7;
-          for (let layer = 0; layer < layers; layer++) {
-            const r = Math.max(90, e.width * 0.28 - layer * 10);
-            const chars = 80 + layer * 20;
-            ctx.fillStyle = `hsla(${(renderNow / 8 + layer * 40) % 360}, 95%, ${45 + layer * 3}%, ${0.18 + layer * 0.05})`;
-            ctx.font = `bold ${10 + layer}px monospace`;
-            for (let i = 0; i < chars; i++) {
-              const a = (i / chars) * Math.PI * 2 + phase * (0.6 + layer * 0.08);
-              const wiggle = Math.sin(a * 3 + phase * 3 + layer) * (14 + layer * 2);
-              const x = Math.cos(a) * (r + wiggle);
-              const y = Math.sin(a) * (r * 0.42 + wiggle * 0.35);
-              const glyph = tokenPool[(i + layer) % tokenPool.length];
-              ctx.fillText(glyph, x, y);
-            }
-          }
-          ctx.fillStyle = 'rgba(255,255,255,0.85)';
-          ctx.font = 'bold 18px monospace';
-          ctx.fillText('KERNEL_PANIC_BOSS', 0, 0);
-          ctx.restore();
-        } else {
-          ctx.save();
-          ctx.translate(e.x, e.y);
-
-          const bodyW = e.width * (0.82 + Math.sin(phase * 1.7) * 0.08);
-          const bodyH = e.height * (0.8 + Math.cos(phase * 1.45) * 0.1);
-          const bulges = 18;
-          ctx.beginPath();
-          for (let i = 0; i <= bulges; i++) {
-            const t = i / bulges;
-            const a = t * Math.PI * 2;
-            const irregular = 1 + Math.sin(a * 3 + phase * 2.6) * 0.17 + Math.sin(a * 7 - phase * 1.8) * 0.08;
-            const x = Math.cos(a) * bodyW * 0.55 * irregular;
-            const y = Math.sin(a) * bodyH * 0.55 * (1 + Math.cos(a * 4 + phase * 2.2) * 0.11);
-            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-          }
-          ctx.closePath();
-          ctx.clip();
-
-          const layers = 4;
-          const lineHeight = Math.max(10, Math.floor(e.height / 7));
-          for (let layer = 0; layer < layers; layer++) {
-            ctx.fillStyle = `hsla(${(renderNow / 11 + layer * 25) % 360}, 88%, ${46 + layer * 8}%, ${0.18 + layer * 0.13})`;
-            ctx.font = `bold ${Math.max(12, Math.min(26, e.height * 0.38 - layer * 1.5))}px monospace`;
-            const lines = Math.max(3, Math.floor(e.height / 8) + layer);
-            for (let row = 0; row < lines; row++) {
-              let line = '';
-              const charsPerLine = Math.max(8, Math.floor(e.width / 9));
-              for (let col = 0; col < charsPerLine; col++) {
-                const t = tokenPool[Math.floor((renderNow / 45 + row * 4 + col * (1.2 + layer * 0.2) + e.id + layer * 3) % tokenPool.length)];
-                line += (t?.[col % t.length] || t?.[0] || 'x');
-              }
-              const x = Math.sin(renderNow * 0.002 + row * 0.7 + layer) * (8 + layer * 4);
-              const y = (row - (lines - 1) / 2) * lineHeight + Math.cos(renderNow * 0.003 + row + layer) * 4;
-              ctx.fillText(line, x, y);
-            }
+        } else if (e.type === 'Value') {
+          const valPool = ['#N/A','#VALUE!','算错了','#NUM!','#NULL!'];
+          ctx.font = boldCode(13);
+          ctx.fillStyle = '#d83b01';
+          ctx.fillText(valPool[Math.floor(now/700 + e.id) % valPool.length], e.x, e.y);
+          // 4个卫星'?'绕行
+          const st = now * 0.002;
+          for (let i = 0; i < 4; i++) {
+            ctx.font = codeFont(9);
+            ctx.fillStyle = 'rgba(216,59,1,0.55)';
+            ctx.fillText('?',
+              e.x + Math.cos(st + i * Math.PI/2) * 26,
+              e.y + Math.sin(st + i * Math.PI/2) * 26
+            );
           }
 
-          ctx.restore();
-        }
+        } else if (e.type === 'FormatBrush') {
+          ctx.font = cnFont(17);
+          ctx.fillStyle = e.state === 'warning' ? '#f85149' : '#ffb900';
+          ctx.fillText('刷', e.x, e.y);
+          if (e.state === 'warning' && e.dashTargetX !== undefined) {
+            const da = Math.atan2((e.dashTargetY||e.y)-e.y, (e.dashTargetX||e.x)-e.x);
+            ctx.font = boldCode(12);
+            ctx.fillStyle = '#f85149';
+            ctx.fillText('>>>', e.x + Math.cos(da)*32, e.y + Math.sin(da)*32);
+          }
 
-        if (e.type === 'VLOOKUP' && e.state === 'aiming' && e.dashTargetX !== undefined && e.dashTargetY !== undefined) {
-          ctx.beginPath();
-          ctx.moveTo(e.x, e.y);
-          ctx.lineTo(e.dashTargetX, e.dashTargetY);
-          ctx.strokeStyle = `rgba(255, 50, 50, ${Math.max(0.2, 1 - (e.stateTimer || 0)/120)})`;
+        } else if (e.type === 'FreezeCell') {
+          ctx.fillStyle = '#e0f2fe';
+          ctx.fillRect(e.x - e.width/2, e.y - e.height/2, e.width, e.height);
+          ctx.strokeStyle = '#00bcd4';
           ctx.lineWidth = 2;
-          ctx.stroke();
+          ctx.strokeRect(e.x - e.width/2, e.y - e.height/2, e.width, e.height);
+          ctx.fillStyle = '#0284c7';
+          ctx.font = codeFont(10);
+          ctx.fillText('Object.freeze({', e.x, e.y - 5);
+          ctx.fillStyle = '#64748b';
+          ctx.fillText('})', e.x, e.y + 7);
+
+        } else if (e.type === 'ProtectedView') {
+          ctx.font = cnFont(17);
+          ctx.fillStyle = '#107c41';
+          ctx.fillText('锁', e.x, e.y);
+          if (e.facingAngle !== undefined) {
+            ctx.font = boldCode(12);
+            ctx.fillStyle = '#00a2ed';
+            ctx.fillText('>>>', e.x + Math.cos(e.facingAngle)*30, e.y + Math.sin(e.facingAngle)*30);
+          }
+
+        } else if (e.type === 'MergedCell') {
+          ctx.fillStyle = '#ede9fe';
+          ctx.fillRect(e.x - e.width/2, e.y - e.height/2, e.width, e.height);
+          ctx.strokeStyle = '#8b5cf6';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(e.x - e.width/2, e.y - e.height/2, e.width, e.height);
+          ctx.fillStyle = '#6d28d9';
+          ctx.font = cnFont(13);
+          ctx.fillText('合并单元格', e.x, e.y);
+
+        } else if (e.type === 'REF') {
+          const refFlash = Math.floor(now / 280 + e.id) % 2 === 0;
+          ctx.font = cnFont(17);
+          ctx.fillStyle = refFlash ? '#f85149' : '#ff8c7a';
+          ctx.fillText('空', e.x, e.y);
+
+        } else if (e.type === 'VLOOKUP') {
+          ctx.font = cnFont(17);
+          ctx.fillStyle = '#0078d7';
+          ctx.fillText('查', e.x, e.y);
+          if (e.state === 'aiming' && e.dashTargetX !== undefined) {
+            const va = Math.atan2((e.dashTargetY||e.y)-e.y, (e.dashTargetX||e.x)-e.x);
+            [0.35, 0.65, 1.0].forEach((alpha, i) => {
+              ctx.fillStyle = `rgba(248,81,73,${alpha})`;
+              ctx.font = boldCode(10 + i*2);
+              ctx.fillText(['>', '>>', '>>>'][i],
+                e.x + Math.cos(va)*(18+i*18),
+                e.y + Math.sin(va)*(18+i*18)
+              );
+            });
+          }
+
+        } else if (e.type === 'MACRO') {
+          ctx.font = cnFont(17);
+          ctx.fillStyle = '#16a34a';
+          ctx.fillText('毒', e.x, e.y);
+
+        } else if (e.type === 'SplitCell') {
+          ctx.font = cnFont(15);
+          ctx.fillStyle = '#e3008c';
+          ctx.fillText('拆', e.x, e.y);
+
+        } else if (e.type === 'MiniBoss') {
+          ctx.fillStyle = '#1e1e1e';
+          ctx.fillRect(e.x - e.width/2, e.y - e.height/2, e.width, e.height);
+          ctx.strokeStyle = '#d29922';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(e.x - e.width/2, e.y - e.height/2, e.width, e.height);
+          ctx.fillStyle = '#d29922';
+          ctx.font = codeFont(11);
+          ctx.fillText('// TODO: fix later', e.x, e.y - 4);
+          ctx.fillStyle = '#888888';
+          ctx.font = codeFont(10);
+          ctx.fillText('//  (never)', e.x, e.y + 8);
+
+        } else if (e.type === 'EliteBoss') {
+          // ── 黄金角螺旋字符团 ──
+          const bossCharCN = ['错','误','乱','码','烫','锟','斤','拷','空','异','常','崩'];
+          const bossCharASCII = ['#','!','@','$','%','&','*','?','0x','FF','NaN','//'];
+          const t = now * 0.001;
+          const hpR = Math.max(0, e.hp / e.maxHp);
+          ctx.save();
+          for (let i = 0; i < 120; i++) {
+            const ga = i * 2.399963; // 黄金角 137.5°
+            const breathe = 0.85 + 0.15 * Math.sin(t * 1.5 + i * 0.4);
+            const r = Math.sqrt(i / 120) * 130 * breathe;
+            const cx = e.x + Math.cos(ga + t * 0.25) * r;
+            const cy = e.y + Math.sin(ga + t * 0.25) * r;
+            if (!isVisible(cx - 12, cy - 12, 24, 24)) continue;
+            const sz = Math.floor(10 + (1 - i / 120) * 14); // 中心大外圈小
+            const bright = Math.floor(155 + (1 - hpR) * 100);
+            const green = Math.floor(hpR * 50);
+            ctx.fillStyle = `rgb(${bright},${green},55)`;
+            // 内圈(i<40)用中文，外圈用ASCII
+            ctx.font = i < 40 ? cnFont(sz) : boldCode(sz);
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const pool = i < 40 ? bossCharCN : bossCharASCII;
+            ctx.fillText(pool[i % pool.length], cx, cy);
+          }
+          ctx.restore();
+          // Boss中心 HP 百分比
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = '#f85149';
+          ctx.font = boldCode(13);
+          ctx.fillText(`BOSS ${Math.floor(hpR * 100)}%`, e.x, e.y - e.height/2 - 18);
         }
 
-        if (e.type === 'MiniBoss' || e.type === 'EliteBoss' || e.type === 'FreezeCell' || e.type === 'MergedCell' || e.type === 'REF' || e.type === 'VLOOKUP' || e.type === 'MACRO') {
-          ctx.fillStyle = '#3a3a3a';
+        // ── HP条（MiniBoss/EliteBoss/特殊怪，保留现有显示条件） ──
+        if (['MiniBoss','EliteBoss','FreezeCell','MergedCell','REF','VLOOKUP','MACRO'].includes(e.type)) {
+          ctx.fillStyle = '#e1dfdd';
           ctx.fillRect(e.x - e.width/2, e.y - e.height/2 - 10, e.width, 4);
-          const hpGrad = ctx.createLinearGradient(e.x - e.width/2, 0, e.x + e.width/2, 0);
-          hpGrad.addColorStop(0, '#ff5454');
-          hpGrad.addColorStop(1, '#ff9b54');
-          ctx.fillStyle = hpGrad;
+          ctx.fillStyle = '#e81123';
           ctx.fillRect(e.x - e.width/2, e.y - e.height/2 - 10, e.width * (e.hp / e.maxHp), 4);
         }
       });
 
       Object.values(gameState.players).forEach((p: any) => {
         if (p.hp > 0) {
-          if (!isVisible(p.x - 40, p.y - 12, 80, 24)) return;
-
+          if (!isVisible(p.x - 40, p.y - 16, 80, 32)) return;
           const isMe = p.id === myId;
-          const now = renderNow;
+          const now = Date.now();
           const isInvincible = p.invincibleUntil && now < p.invincibleUntil;
-          
           if (isInvincible) {
-            ctx.globalAlpha = Math.floor(now / 150) % 2 === 0 ? 0.5 : 1.0;
+            ctx.globalAlpha = Math.floor(now / 150) % 2 === 0 ? 0.4 : 1.0;
           }
-          
-          ctx.fillStyle = 'rgba(33, 115, 70, 0.1)';
-          ctx.fillRect(p.x - 40, p.y - 12, 80, 24);
-          ctx.strokeStyle = isMe ? '#217346' : '#800080';
+
+          const lowHp = p.hp / p.maxHp < 0.3;
+          const flashOn = Math.floor(now / 300) % 2 === 0;
+
+          // 单元格外框（Excel绿色单元格）
+          const cellW = 64, cellH = 24;
+          ctx.fillStyle = isMe
+            ? (lowHp && flashOn ? 'rgba(232,17,35,0.15)' : 'rgba(33,115,70,0.12)')
+            : 'rgba(128,0,128,0.12)';
+          ctx.fillRect(p.x - cellW/2, p.y - cellH/2, cellW, cellH);
+          ctx.strokeStyle = isMe
+            ? (lowHp && flashOn ? '#e81123' : '#217346')
+            : '#800080';
           ctx.lineWidth = 2;
-          ctx.strokeRect(p.x - 40, p.y - 12, 80, 24);
-          
-          ctx.fillStyle = isMe ? '#217346' : '#800080';
-          ctx.fillRect(p.x + 37, p.y + 9, 6, 6);
+          ctx.strokeRect(p.x - cellW/2, p.y - cellH/2, cellW, cellH);
 
-          ctx.fillStyle = '#000000';
-          ctx.font = '12px Calibri';
-          ctx.textAlign = 'left';
-          ctx.fillText(isMe ? '我' : '同事', p.x - 35, p.y + 4);
+          // 右下角调整柄（Excel单元格右下角小方块）
+          const hColor = isMe ? (lowHp && flashOn ? '#e81123' : '#217346') : '#800080';
+          ctx.fillStyle = hColor;
+          ctx.fillRect(p.x + cellW/2 - 4, p.y + cellH/2 - 4, 5, 5);
 
-          ctx.fillStyle = '#e1dfdd';
-          ctx.fillRect(p.x - 40, p.y + 15, 80, 4);
-          ctx.fillStyle = '#217346';
-          ctx.fillRect(p.x - 40, p.y + 15, 80 * (p.hp / p.maxHp), 4);
+          // 单元格内文字
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = isMe
+            ? (lowHp && flashOn ? '#e81123' : '#217346')
+            : '#800080';
+          ctx.font = cnFont(13);
+          ctx.fillText(isMe ? '我' : '同事', p.x, p.y);
+
+          // HP条（单元格正下方，█字符形式）
+          const hpFull = Math.max(0, Math.round((p.hp / p.maxHp) * 8));
+          const hpBar = '█'.repeat(hpFull) + '░'.repeat(8 - hpFull);
+          ctx.font = codeFont(9);
+          ctx.fillStyle = lowHp ? '#e81123' : '#217346';
+          ctx.fillText(hpBar, p.x, p.y + cellH/2 + 7);
 
           ctx.globalAlpha = 1.0;
+
         } else if (p.id === myId) {
           ctx.fillStyle = '#e81123';
-          ctx.font = 'bold 12px Calibri';
-          ctx.fillText('#DIV/0!', p.x - 20, p.y + 4);
-        }
-      });
-
-      Object.values(gameState.players).forEach((p: any) => {
-        if (!(p?.specificUpgrades || []).includes('array_orbit') || p.hp <= 0) return;
-        const oa = p.orbitAngle || 0;
-        for (let i = 0; i < 8; i++) {
-          const a = oa + i * Math.PI / 4;
-          const ox = p.x + Math.cos(a) * 55;
-          const oy = p.y + Math.sin(a) * 55;
-          if (!isVisible(ox - 8, oy - 8, 16, 16)) continue;
-          ctx.beginPath();
-          ctx.arc(ox, oy, 6, 0, Math.PI * 2);
-          ctx.fillStyle = '#107c41';
-          ctx.fill();
-          ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-          ctx.lineWidth = 1;
-          ctx.stroke();
+          ctx.font = boldCode(14);
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('#DIV/0!', p.x, p.y);
         }
       });
 
       gameState.bullets?.forEach((b: any) => {
         if (!isVisible(b.x - 20, b.y - 20, 40, 40)) return;
-
-        ctx.save();
-        ctx.translate(b.x, b.y);
-
-        if (b.angle !== undefined) {
-          ctx.rotate(b.angle);
-        } else {
-
-          ctx.rotate(Math.atan2(b.vy, b.vx));
-        }
+        const now = Date.now();
 
         if (b.type === 'wordart') {
-          let scaleX = 1;
-          let scaleY = 1;
-          if (b.width && b.height) {
-            const baseWidth = b.size * 4;
-            const baseHeight = b.size;
-            scaleX = b.width / baseWidth;
-            scaleY = b.height / baseHeight;
-            ctx.scale(scaleX, scaleY);
-          }
-
-          const stream = b.isTitle
-            ? '<<while(alive){push(code_wall);}>>'
-            : 'if(hit){++pressure;}else{advance();}';
-          const glyphSize = Math.max(14, b.size * 0.5);
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.font = (b.isItalic ? 'italic ' : '') + `900 ${glyphSize}px monospace`;
-          ctx.shadowColor = b.isShield ? 'rgba(120,255,250,0.9)' : 'rgba(60,230,190,0.45)';
-          ctx.shadowBlur = b.isShield ? 18 : 9;
-
-          const lanes = b.isTitle ? 7 : 5;
-          for (let lane = -Math.floor(lanes / 2); lane <= Math.floor(lanes / 2); lane++) {
-            const laneOffset = lane * (glyphSize * 0.64);
-            const laneAlpha = 0.5 + (1 - Math.abs(lane) / (lanes * 0.6)) * 0.45;
-            let out = '';
-            const len = b.isTitle ? 22 : 16;
-            for (let i = 0; i < len; i++) {
-              const idx = Math.floor((renderNow / 48 + i + lane * 2 + b.id) % stream.length);
-              out += stream[idx] || '#';
-            }
-            const xJitter = Math.sin(renderNow * 0.01 + lane * 0.7 + b.id) * 6;
-            const yJitter = Math.cos(renderNow * 0.009 + lane * 0.8 + b.id) * 2.5;
-            ctx.fillStyle = `rgba(${90 + Math.abs(lane) * 22},255,220,${laneAlpha})`;
-            ctx.fillText(out, xJitter, laneOffset + yJitter);
-          }
-
-          if (b.isStrikethrough) {
-            ctx.beginPath();
-            ctx.moveTo(-b.size * 3.2, 0);
-            ctx.lineTo(b.size * 3.2, 0);
-            ctx.strokeStyle = '#ff4b4b';
-            ctx.lineWidth = 3;
-            ctx.stroke();
-          }
-        } else if (b.type === 'sparkline') {
-          const token = ['=>', '::', '01', '{}'][Math.floor((renderNow / 60 + b.id) % 4)];
-          ctx.fillStyle = 'rgba(70,180,255,0.9)';
-          ctx.font = `bold ${Math.max(12, b.size * 0.9)}px monospace`;
-          for (let k = -2; k <= 2; k++) {
-            const x = k * (b.size * 0.45);
-            const y = Math.sin(renderNow * 0.01 + k + b.id) * 2;
-            ctx.fillText(token, x, y);
-          }
-        } else if (b.type === 'comment') {
-          const bombTokens = ['#REF!', '#VALUE!', '{}', '[[]]', 'NaN', '0xFF', 'ERR', 'SIG'];
-          const radius = Math.max(8, b.size * 0.55);
-          const glyphs = 10;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-
-          for (let i = 0; i < glyphs; i++) {
-            const a = (i / glyphs) * Math.PI * 2 + renderNow * 0.012;
-            const rr = radius + Math.sin(renderNow * 0.02 + i) * 2;
-            const x = Math.cos(a) * rr;
-            const y = Math.sin(a) * rr;
-            const tok = bombTokens[(i + b.id) % bombTokens.length];
-            ctx.font = `bold ${Math.max(10, b.size * 0.5 - (i % 3))}px monospace`;
-            ctx.fillStyle = `rgba(255, ${140 - i * 6}, ${80 + i * 5}, ${0.75 - i * 0.03})`;
-            ctx.fillText(tok, x, y);
-          }
-
-          ctx.font = `bold ${Math.max(11, b.size * 0.6)}px monospace`;
-          ctx.fillStyle = 'rgba(255,230,180,0.95)';
-          ctx.fillText('/*BOMB*/', 0, 0);
-
-          if (b.isStrikethrough) {
-            ctx.beginPath();
-            ctx.moveTo(-b.size/2, 0);
-            ctx.lineTo(b.size/2, 0);
-            ctx.strokeStyle = '#ff4b4b';
+          ctx.save();
+          ctx.translate(b.x, b.y);
+          ctx.rotate(b.angle || 0);
+          
+          if (b.isTitle) {
+            // 巨型大标题清场特效
+            const scale = 1 + Math.sin(now * 0.01) * 0.1;
+            ctx.scale(scale, scale);
+            ctx.font = cnFont(48);
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            // 红色渐变
+            const grad = ctx.createLinearGradient(0, -24, 0, 24);
+            grad.addColorStop(0, '#ff4d4f');
+            grad.addColorStop(1, '#cf1322');
+            
+            ctx.shadowColor = 'rgba(207,19,34,0.8)';
+            ctx.shadowBlur = 15;
+            ctx.fillStyle = grad;
+            ctx.fillText(b.text || '清场', 0, 0);
+            
+            ctx.shadowBlur = 0;
             ctx.lineWidth = 2;
-            ctx.stroke();
+            ctx.strokeStyle = '#ffffff';
+            ctx.strokeText(b.text || '清场', 0, 0);
+          } else {
+            // 普通 WordArt 子弹：绿色填充，前端白色发光
+            ctx.font = boldCode(14);
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            ctx.shadowColor = '#2ea043';
+            ctx.shadowBlur = 8;
+            ctx.fillStyle = '#2ea043';
+            
+            // 动态字符
+            const chars = ['0','1','A','B','C','D','E','F'];
+            const char = chars[Math.floor(now/100 + b.id) % chars.length];
+            ctx.fillText(char, 0, 0);
+            
+            // 扫描线特效
+            ctx.fillStyle = 'rgba(46,160,67,0.3)';
+            ctx.fillRect(-8, -8 + (now/20)%16, 16, 2);
           }
+          ctx.restore();
+
         } else if (b.type === 'array') {
-          ctx.fillStyle = '#73f7a6';
-          ctx.font = (b.isItalic ? 'italic ' : '') + `bold ${Math.max(12, b.size)}px monospace`;
+          ctx.save();
+          ctx.translate(b.x, b.y);
+          ctx.rotate(b.angle || 0);
+          ctx.font = codeFont(12);
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.shadowColor = 'rgba(100,255,170,0.5)';
-          ctx.shadowBlur = 6;
-          const chars = ['0', '1', 'x', 'n', '{', '}', '[', ']', '='];
-          const char = chars[Math.floor((renderNow / 50 + b.id) % chars.length)];
-          ctx.fillText(char, 0, 0);
-          ctx.shadowBlur = 0;
-
+          
+          // 击中后变红，否则绿色
+          ctx.fillStyle = b.hit ? '#f85149' : '#3fb950';
+          const arrText = b.id % 2 === 0 ? 'arr[i]' : 'i++';
+          ctx.fillText(arrText, 0, 0);
+          
           if (b.isStrikethrough) {
             ctx.beginPath();
-            ctx.moveTo(-b.size/2, 0);
-            ctx.lineTo(b.size/2, 0);
-            ctx.strokeStyle = '#ff4b4b';
+            ctx.moveTo(-15, 0);
+            ctx.lineTo(15, 0);
+            ctx.strokeStyle = '#f85149';
             ctx.lineWidth = 2;
             ctx.stroke();
           }
-        } else if (b.type === 'ctrl_c') {
-          ctx.fillStyle = '#a8a8a8';
-          ctx.font = 'bold 12px monospace';
+          ctx.restore();
+
+        } else if (b.type === 'comment') {
+          ctx.save();
+          ctx.translate(b.x, b.y);
+          ctx.rotate(b.angle || 0);
+          
+          // 深灰底色，黄色边框
+          ctx.fillStyle = '#2d2d2d';
+          ctx.beginPath();
+          ctx.roundRect(-20, -10, 40, 20, 4);
+          ctx.fill();
+          ctx.strokeStyle = '#d29922';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+          
+          ctx.font = codeFont(10);
+          ctx.fillStyle = '#d29922';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('[clone()]', 0, 0);
+          ctx.fillText('throw Error()', 0, 0);
+          
+          // 引信火花
+          const sparkX = -20 + (now/20)%40;
+          ctx.fillStyle = '#f85149';
+          ctx.fillRect(sparkX, -12, 4, 4);
+          
+          if (b.isStrikethrough) {
+            ctx.beginPath();
+            ctx.moveTo(-25, 0);
+            ctx.lineTo(25, 0);
+            ctx.strokeStyle = '#f85149';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
+          ctx.restore();
         } else {
-          ctx.fillStyle = b.isCrit ? '#ff6767' : textColor;
+          ctx.save();
+          ctx.translate(b.x, b.y);
+          ctx.rotate(Math.atan2(b.vy, b.vx));
+          ctx.fillStyle = b.textColor || '#000000';
           let fontStr = '';
           if (b.isItalic) fontStr += 'italic ';
           if (b.isBold) fontStr += 'bold ';
-          fontStr += `${b.size}px monospace`;
+          fontStr += `${b.size}px Calibri`;
           ctx.font = fontStr;
+          
+          if (b.isCrit) ctx.fillStyle = '#e81123';
+          
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('code', 0, 0);
-
+          ctx.fillText('文字', 0, 0);
+          
           if (b.isUnderline) {
             ctx.beginPath();
             ctx.moveTo(-10, b.size/2);
             ctx.lineTo(10, b.size/2);
-            ctx.strokeStyle = textColor;
+            ctx.strokeStyle = b.textColor || '#000000';
             ctx.lineWidth = b.isBold ? 2 : 1;
             ctx.stroke();
           }
+          ctx.restore();
         }
-
-        ctx.restore();
       });
 
       gameState.aoeWarnings?.forEach((aoe: any) => {
@@ -3130,62 +3124,53 @@ export default function App() {
         ctx.save();
         ctx.translate(l.x, l.y);
         ctx.rotate(l.angle);
+        const now = Date.now();
         
         if (l.type === 'sparkline') {
-          const isUlt = l.width > 20; // Heuristic for ult laser
           const isCannon = l.isCannon;
           const alpha = Math.max(0, l.life / l.maxLife);
-          const visibleLaserRange = Math.min(l.range, canvas.width / SCALE + 320); //保留
-          const flow = (renderNow * 0.25) % 8;
-          
-          const sparklineChars = '01NaNnull{}[]()=>undefinedvoid0xFFerr%$#@!';
           
           if (isCannon) {
-            ctx.shadowColor = `rgba(0, 0, 0, ${alpha})`;
+            // 巨型激光：大号重复字符
+            ctx.shadowColor = `rgba(0,0,0,${alpha})`;
             ctx.shadowBlur = 15;
-            ctx.fillStyle = `rgba(50, 50, 50, ${alpha})`;
-            ctx.font = 'bold 36px monospace';
-            const charCount = Math.floor(visibleLaserRange / 9);
+            ctx.fillStyle = `rgba(50,50,50,${alpha})`;
+            ctx.font = boldCode(36);
+            const charCount = Math.floor(l.range / 20);
             for (let i = 0; i < charCount; i++) {
-              const dist = i * 9 + flow;
-              const seed = Math.floor(renderNow / 50) + i;
-              const char = sparklineChars[seed % sparklineChars.length];
-              const yOffset = Math.sin(i * 0.35 + renderNow * 0.015) * 2;
-              
+              const dist = i * 20;
+              const char = '01NaNnull{}[]()=>undefinedvoid0xFFerr%$#@!'[(Math.floor(now/50)+i)%42];
+              const yOffset = Math.sin(dist*0.05 + now*0.01) * 15;
               for (let w = -2; w <= 2; w++) {
-                ctx.fillText(char, dist, yOffset + w * 18);
+                ctx.fillText(char, dist, yOffset + w * 25);
               }
             }
           } else {
-            ctx.fillStyle = `rgba(30, 30, 30, ${alpha})`;
-            ctx.font = '14px monospace';
-            const charCount = Math.floor(visibleLaserRange / 4);
+            // 普通激光：字符流
+            ctx.font = codeFont(14);
+            const charCount = Math.floor(l.range / 10);
             for (let i = 0; i < charCount; i++) {
-              const dist = i * 4 + flow;
-              const seed = Math.floor(renderNow / 50) + i;
-              const char = sparklineChars[seed % sparklineChars.length];
-              const yOffset = Math.sin(i * 0.42 + renderNow * 0.02) * 1.2;
-              const fade = 1 - (dist / visibleLaserRange);
-              ctx.fillStyle = `rgba(30, 30, 30, ${alpha * fade})`;
+              const dist = i * 10;
+              const char = '01NaNnull{}[]()=>undefinedvoid0xFFerr%$#@!'[(Math.floor(now/50)+i)%42];
+              const yOffset = Math.sin(dist*0.1 + now*0.01) * 5;
+              const fade = 1 - (dist / l.range);
+              ctx.fillStyle = `rgba(30,30,30,${alpha * fade})`;
               
-              const widthMultiplier = isUlt ? 3 : 1;
+              const widthMultiplier = l.width > 20 ? 3 : 1;
               for (let w = -widthMultiplier; w <= widthMultiplier; w++) {
                 ctx.fillText(char, dist, yOffset + w * 12);
               }
             }
           }
-          
-          // Reset shadow
           ctx.shadowBlur = 0;
         } else {
-          ctx.fillStyle = `rgba(232, 17, 35, ${l.life / 30})`;
-          ctx.font = 'bold 24px Consolas';
+          ctx.fillStyle = `rgba(232,17,35,${l.life / 30})`;
+          ctx.font = boldCode(24);
           ctx.textAlign = 'left';
           ctx.textBaseline = 'middle';
           ctx.shadowColor = '#e81123';
           ctx.shadowBlur = 10;
-          const laserStr = "%***&&%%…………&".repeat(20);
-          ctx.fillText(laserStr, 0, 0);
+          ctx.fillText("%***&&%%…………&".repeat(20), 0, 0);
         }
         ctx.restore();
       });
@@ -3195,9 +3180,20 @@ export default function App() {
         p.y += p.vy;
         p.life--;
         ctx.fillStyle = p.color;
-        ctx.font = p.color === '#e81123' ? 'bold 20px Calibri' : 'bold 14px Calibri';
-        ctx.globalAlpha = Math.max(0, p.life / 30);
-        ctx.fillText(p.text, p.x, p.y);
+        
+        let dispText = p.text;
+        if (dispText) {
+          ctx.font = p.color === '#e81123' ? boldCode(20) : boldCode(14);
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.globalAlpha = Math.max(0, p.life / 30);
+          ctx.fillText(dispText, p.x, p.y);
+        } else {
+          ctx.globalAlpha = Math.max(0, p.life / 30);
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size || 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
       });
       ctx.globalAlpha = 1.0;
       particles.current = particles.current.filter(p => p.life > 0);
@@ -3285,7 +3281,7 @@ export default function App() {
     return () => {
       if (animationFrameId.current) cancelAnimationFrame(animationFrameId.current);
     };
-  }, [currentRoom, showGridMenu, isCleared]);
+  }, [currentRoom, showGridMenu]);
 
   if (!currentRoom) {
     return (
@@ -3330,7 +3326,7 @@ export default function App() {
           <div className="w-px h-8 bg-gray-300"></div>
           <div className="flex flex-col items-center gap-1">
             <span className="text-gray-700 font-semibold">第 {uiState?.stage || 1} 关</span>
-            <span className="text-[10px] text-gray-500">生存进度: {Math.floor((uiState?.stageTimer || 0) / 60)}s / {getStageDuration(uiState?.stage || 1)}s · 总关卡 {TOTAL_STAGES}</span>
+            <span className="text-[10px] text-gray-500">生存进度: {Math.floor((uiState?.stageTimer || 0) / 60)}s / {getStageDuration(uiState?.stage || 1)}s</span>
           </div>
         </div>
       </div>
@@ -3352,12 +3348,22 @@ export default function App() {
           style={{ cursor: 'crosshair' }}
         />
         
-        {me?.hp <= 0 && !isCleared && (
-          <GameOver stageTimer={uiState?.stageTimer || 0} onRestart={() => window.location.reload()} />
+        {me?.hp <= 0 && uiState?.gameOver !== 'victory' && (
+          <GameOver survivalSeconds={uiState?.survivalSeconds || 0} onRestart={() => window.location.reload()} />
         )}
 
-        {isCleared && (
-          <GameClear score={finalScore} kills={me?.kills || 0} deaths={me?.deaths || 0} onRestart={() => window.location.reload()} />
+        {uiState?.gameOver === 'victory' && (
+          <div style={{ position:'fixed', inset:0, background:'#000', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', color:'#107c41', fontFamily:'Consolas,monospace', zIndex: 50 }}>
+            <div style={{ fontSize:48, marginBottom:24 }}>🎉 通关！</div>
+            <div style={{ fontSize:24, color:'#fff', marginBottom:16 }}>恭喜你击败了所有错误</div>
+            <div style={{ fontSize:18, color:'#c8c6c4', marginBottom:8 }}>关卡完成：15</div>
+            <div style={{ fontSize:18, color:'#c8c6c4', marginBottom:8 }}>击杀数：{uiState.totalKills || 0}</div>
+            <div style={{ fontSize:18, color:'#c8c6c4', marginBottom:32 }}>存活时长：{Math.floor((uiState.survivalSeconds || 0)/60)}分{(uiState.survivalSeconds || 0)%60}秒</div>
+            <div style={{ fontSize:14, color:'#ffb900', maxWidth: '80%', textAlign: 'center', lineHeight: 1.5 }}>技能：{(uiState.playerUpgradeNames || []).join(' / ')}</div>
+            <button onClick={() => window.location.reload()} style={{ marginTop:40, padding:'12px 32px', background:'#107c41', color:'#fff', border:'none', fontSize:18, cursor:'pointer', borderRadius:4 }}>
+              再来一局
+            </button>
+          </div>
         )}
 
         {me?.generalUpgrades.includes('sum') && (
@@ -3402,11 +3408,11 @@ export default function App() {
       </div>
 
       <div className="bg-[#f3f2f1] border-t border-[#e1dfdd] flex items-center px-2 py-1 text-sm text-gray-600">
-        <div className="flex gap-1">
-          {Array.from({ length: TOTAL_STAGES }, (_, i) => i + 1).map(sheetNum => (
+        <div className="flex gap-1 overflow-x-auto max-w-[70vw] no-scrollbar">
+          {Array.from({ length: 15 }, (_, i) => i + 1).map(sheetNum => (
             <div 
               key={sheetNum}
-              className={`px-3 py-1 cursor-default ${(uiState?.stage || 1) === sheetNum ? 'bg-white border-b-2 border-[#217346] font-semibold text-[#217346]' : 'hover:bg-gray-200'}`}
+              className={`px-4 py-1 cursor-default whitespace-nowrap ${(uiState?.stage || 1) === sheetNum ? 'bg-white border-b-2 border-[#217346] font-semibold text-[#217346]' : 'hover:bg-gray-200'}`}
             >
               Sheet{sheetNum}
             </div>

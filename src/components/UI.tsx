@@ -1,34 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AttackForm, Upgrade, ATTACK_FORM_NAMES, ATTACK_FORM_DESCS, UPGRADE_NAMES, UPGRADE_DESCS } from '../gameLogic';
 
-export const GameOver: React.FC<{ stageTimer: number; onRestart: () => void }> = ({ stageTimer, onRestart }) => (
+export const GameOver: React.FC<{ survivalSeconds: number; onRestart: () => void }> = ({ survivalSeconds, onRestart }) => (
   <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-50">
     <div className="bg-white p-8 border border-[#c8c6c4] shadow-xl flex flex-col items-center max-w-md w-full">
       <div className="text-4xl mb-4">⚠️</div>
       <h2 className="text-2xl font-bold text-[#e81123] mb-2">#VALUE! (你死了)</h2>
-      <p className="text-gray-600 mb-6 text-center">你的单元格已被清空。生存时间: {Math.floor(stageTimer / 60)}s</p>
+      <p className="text-gray-600 mb-6 text-center">你的单元格已被清空。生存时间: {Math.floor(survivalSeconds / 60)}分{survivalSeconds % 60}秒</p>
       <button 
         className="px-6 py-2 bg-[#217346] text-white font-bold hover:bg-[#1e603b] transition-colors"
         onClick={onRestart}
       >
         重新开始
-      </button>
-    </div>
-  </div>
-);
-
-export const GameClear: React.FC<{ score: number; kills: number; deaths: number; onRestart: () => void }> = ({ score, kills, deaths, onRestart }) => (
-  <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-50">
-    <div className="bg-white p-8 border border-[#c8c6c4] shadow-xl flex flex-col items-center max-w-md w-full">
-      <div className="text-4xl mb-4">🏆</div>
-      <h2 className="text-2xl font-bold text-[#107c41] mb-2">恭喜通关！</h2>
-      <p className="text-gray-700 mb-1">总分：<span className="font-bold">{score}</span></p>
-      <p className="text-gray-600 mb-6 text-center">击杀: {kills} / 死亡: {deaths}</p>
-      <button
-        className="px-6 py-2 bg-[#217346] text-white font-bold hover:bg-[#1e603b] transition-colors"
-        onClick={onRestart}
-      >
-        再来一局
       </button>
     </div>
   </div>
@@ -67,6 +50,14 @@ export const UpgradeSelection: React.FC<{
   upgradesToChoose: number;
   onSelect: (upgrade: Upgrade) => void;
 }> = ({ stage, upgradeChoices, upgradesToChoose, onSelect }) => {
+  const [selectedPending, setSelectedPending] = useState<Upgrade[]>([]);
+
+  const handleSelect = (upgrade: Upgrade) => {
+    if (selectedPending.includes(upgrade)) return;
+    setSelectedPending(prev => [...prev, upgrade]);
+    onSelect(upgrade);
+  };
+
   return (
     <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-20 p-4">
       <div className="bg-white p-6 rounded shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
@@ -74,16 +65,20 @@ export const UpgradeSelection: React.FC<{
         <p className="text-gray-600 mb-6 shrink-0">准备进入第 {stage + 1} 关 (还可选择 {upgradesToChoose} 项)</p>
         
         <div className="grid grid-cols-1 gap-4 overflow-y-auto flex-1 pr-2">
-          {upgradeChoices.map(upgrade => (
-            <button 
-              key={upgrade}
-              onClick={() => onSelect(upgrade)}
-              className="flex flex-col items-start p-4 border border-gray-300 hover:border-[#217346] hover:bg-green-50 transition-colors text-left"
-            >
-              <span className="font-bold text-lg text-[#217346]">{UPGRADE_NAMES[upgrade]}</span>
-              <span className="text-gray-600 mt-1">{UPGRADE_DESCS[upgrade]}</span>
-            </button>
-          ))}
+          {upgradeChoices.map(upgrade => {
+            const isSelected = selectedPending.includes(upgrade);
+            return (
+              <button 
+                key={upgrade}
+                onClick={() => handleSelect(upgrade)}
+                disabled={isSelected}
+                className={`flex flex-col items-start p-4 border transition-colors text-left ${isSelected ? 'border-gray-400 bg-gray-100 opacity-50' : 'border-gray-300 hover:border-[#217346] hover:bg-green-50'}`}
+              >
+                <span className={`font-bold text-lg ${isSelected ? 'text-gray-500' : 'text-[#217346]'}`}>{UPGRADE_NAMES[upgrade]}</span>
+                <span className="text-gray-600 mt-1">{UPGRADE_DESCS[upgrade]}</span>
+              </button>
+            );
+          })}
           {upgradeChoices.length === 0 && (
             <button 
               onClick={() => onSelect('bold')}
@@ -129,16 +124,24 @@ export const SumSkillOverlay: React.FC<{ sumStacks: number; knockbackMult: numbe
   </div>
 );
 
-export const GridMenu: React.FC<{ pos: { x: number; y: number }; onAction: (action: string) => void; onCancel: () => void }> = ({ pos, onAction, onCancel }) => (
-  <div 
-    id="grid-menu"
-    className="absolute bg-white border border-gray-300 shadow-lg py-1 flex flex-col text-sm z-10"
-    style={{ left: pos.x, top: pos.y }}
-  >
-    <button className="px-4 py-1 hover:bg-gray-100 text-left" onClick={() => onAction('area')}>删除选区 (Delete Area)</button>
-    <button className="px-4 py-1 hover:bg-gray-100 text-left" onClick={() => onAction('row')}>删除行 (Delete Row)</button>
-    <button className="px-4 py-1 hover:bg-gray-100 text-left" onClick={() => onAction('col')}>删除列 (Delete Column)</button>
-    <div className="h-px bg-gray-200 my-1"></div>
-    <button className="px-4 py-1 hover:bg-gray-100 text-left text-gray-500" onClick={onCancel}>取消</button>
-  </div>
-);
+export const GridMenu: React.FC<{ pos: { x: number; y: number }; onAction: (action: string) => void; onCancel: () => void }> = ({ pos, onAction, onCancel }) => {
+  const menuWidth = 150;
+  const menuHeight = 160;
+  return (
+    <div 
+      id="grid-menu"
+      className="fixed bg-white border border-gray-300 shadow-lg py-1 flex flex-col text-sm z-10"
+      style={{ 
+        maxWidth: 'calc(100vw - 40px)',
+        left: `clamp(10px, ${pos.x}px, calc(100vw - ${menuWidth}px - 10px))`,
+        top: `clamp(10px, ${pos.y}px, calc(100vh - ${menuHeight}px - 10px))`
+      }}
+    >
+      <button className="px-4 py-1 hover:bg-gray-100 text-left" onClick={() => onAction('area')}>删除选区 (Delete Area)</button>
+      <button className="px-4 py-1 hover:bg-gray-100 text-left" onClick={() => onAction('row')}>删除行 (Delete Row)</button>
+      <button className="px-4 py-1 hover:bg-gray-100 text-left" onClick={() => onAction('col')}>删除列 (Delete Column)</button>
+      <div className="h-px bg-gray-200 my-1"></div>
+      <button className="px-4 py-1 hover:bg-gray-100 text-left text-gray-500" onClick={onCancel}>取消</button>
+    </div>
+  );
+};
