@@ -33,6 +33,19 @@ export function attachInputHandlers(deps: InputHandlerDeps): () => void {
   } = deps;
 
   const handleKeyDown = (e: KeyboardEvent) => {
+    const gs = gameStateRef.current;
+
+    if (gs && gs.players[myId]) {
+      const me = gs.players[myId];
+      const digit = Number(e.key);
+
+      if (gs.isSelectingForm && digit >= 1 && digit <= 4 && gs.formChoices[digit - 1]) {
+        me.attackForm = gs.formChoices[digit - 1];
+        gs.isSelectingForm = false;
+      }
+
+    }
+
     if (e.key === 'w' || e.key === 'W') keys.current.w = true;
     if (e.key === 'a' || e.key === 'A') keys.current.a = true;
     if (e.key === 's' || e.key === 'S') keys.current.s = true;
