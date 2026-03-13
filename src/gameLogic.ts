@@ -264,7 +264,7 @@ export interface Puddle {
   x: number;
   y: number;
   radius: number;
-  type: 'formatPaint' | 'freeze' | 'highlight' | 'explosion' | 'blacken' | 'burn_slow' | 'vulnerable';
+  type: 'formatPaint' | 'freeze' | 'highlight' | 'explosion' | 'blacken' | 'burn_slow' | 'vulnerable' | 'afterimage' | 'slow_zone';
   life: number;
   maxLife: number;
   damage?: number;
@@ -296,7 +296,8 @@ export interface Bullet {
   trackRadius?: number;
   leavesResidue?: boolean;
   isHighlight?: boolean;
-  bouncesLeft?: number;
+  enemyBouncesLeft?: number;
+  wallBouncesLeft?: number;
   isItalic?: boolean;
   isStrikethrough?: boolean;
   isBlacken?: boolean;
@@ -331,9 +332,12 @@ export interface Laser {
   isCrit?: boolean;
   isStrikethrough?: boolean;
   eliteDamageMult?: number;
-  bouncesLeft?: number;
+  enemyBouncesLeft?: number;
+  wallBouncesLeft?: number;
   hasHit?: boolean;
   isHighlight?: boolean;
+  isSlow?: boolean;
+  stunChance?: number;
   leavesResidue?: boolean;
   hitTargets?: Set<number>;
   isCannon?: boolean;
